@@ -5,21 +5,28 @@ import { Badge } from "./UI";
 
 export default function Topbar() {
   const { title } = useWorkspace();
-  const [llmConfigured, setLlmConfigured] = useState(null);
+  const [status, setStatus] = useState("checking");
 
   useEffect(() => {
-    api.aiStatus().then((s) => setLlmConfigured(s.llm_configured)).catch(() => {});
+    let active = true;
+    api.aiStatus()
+      .then((result) => {
+        if (active) setStatus(result.llm_configured ? "configured" : "fallback");
+      })
+      .catch(() => {
+        if (active) setStatus("unavailable");
+      });
+    return () => { active = false; };
   }, []);
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white/80 px-6 backdrop-blur">
-      <h1 className="text-lg font-semibold tracking-tight text-slate-800">{title}</h1>
-      <div>
-        {llmConfigured === null ? null : llmConfigured ? (
-          <Badge tone="green">Groq (Llama 3.3) connected</Badge>
-        ) : (
-          <Badge tone="amber">AI: heuristic fallback</Badge>
-        )}
+    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white/80 px-4 backdrop-blur sm:px-6">
+      <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight text-slate-800">{title}</h1>
+      <div className="shrink-0" aria-live="polite">
+        {status === "checking" && <Badge tone="amber">Checking AI…</Badge>}
+        {status === "configured" && <Badge tone="green">AI model configured</Badge>}
+        {status === "fallback" && <Badge tone="amber">AI: heuristic fallback</Badge>}
+        {status === "unavailable" && <Badge tone="amber">AI status unavailable</Badge>}
       </div>
     </header>
   );

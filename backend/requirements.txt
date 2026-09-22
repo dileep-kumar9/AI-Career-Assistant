@@ -1,0 +1,28 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+sqlalchemy
+psycopg2-binary
+email-validator
+pydantic
+pytest
+python-multipart
+
+# RAG (local, no external model download required)
+scikit-learn
+numpy
+
+# Resume parsing & generation
+pdfplumber
+python-docx
+reportlab
+
+# Job link parsing / job discovery
+requests
+beautifulsoup4
+
+# Application automation (optional -- also run: playwright install chromium)
+playwright
+
+# Google Sign-In verification (optional -- app works without it)
+google-auth

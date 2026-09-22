@@ -1,0 +1,144 @@
+﻿C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:23:   createUser: (data) => request("/users/", { method: "POST", body: JSON.stringify(data) }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:25:   googleSignIn: (credential) => request("/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:27:   getProfile: (userId) => request(`/users/${userId}/profile/`),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:28:   upsertProfile: (userId, data, exists) =>
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:29:     request(`/users/${userId}/profile/`, { method: exists ? "PUT" : "POST", body: JSON.stringify(data) }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:31:   listResumes: (userId) => request(`/users/${userId}/resumes/`),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:32:   getMasterResume: (userId) => request(`/users/${userId}/resumes/master`),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:33:   setMasterResume: (userId, data) => request(`/users/${userId}/resumes/set-master`, { method: "POST", body: JSON.stringify(data) }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:34:   createResume: (userId, data) => request(`/users/${userId}/resumes/`, { method: "POST", body: JSON.stringify(data) }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:35:   uploadResume: (userId, title, file) => {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:38:     return fetch(`${BASE_URL}/users/${userId}/resumes/upload?title=${encodeURIComponent(title)}`, {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:46:   tailorResume: (userId, data) => request(`/users/${userId}/resumes/tailor`, { method: "POST", body: JSON.stringify(data) }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:47:   exportResume: (userId, data) => request(`/users/${userId}/resumes/export`, { method: "POST", body: JSON.stringify(data) }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:48:   resumeDownloadUrl: (userId, filename) => `${BASE_URL}/users/${userId}/resumes/download/${filename}`,
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:61:   discoverRanked: (query, limit = 20, { userId, profileText } = {}) => {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:63:     if (userId) params.set("user_id", userId);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:74:   listApplications: (userId, status) =>
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:75:     request(`/users/${userId}/applications/${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:76:   createApplication: (userId, data) =>
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:77:     request(`/users/${userId}/applications/`, { method: "POST", body: JSON.stringify(data) }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:78:   updateApplicationStatus: (userId, appId, status) =>
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:79:     request(`/users/${userId}/applications/${appId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:80:   deleteApplication: (userId, appId) => request(`/users/${userId}/applications/${appId}`, { method: "DELETE" }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:81:   applicationsSummary: (userId) => request(`/users/${userId}/applications/summary`),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:86:   interviewHistory: (userId) => request(`/interview/history/${userId}`),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:89:   autoDetectProfile: (userId, data) => request(`/users/${userId}/profile/from-resume`, { method: "POST", body: JSON.stringify(data) }),
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\api\client.js:91:   // Guest (no-login) resume tools
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\AuthModal.jsx:7:   const { createAndSetUser, signInWithGoogleCredential } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\AuthModal.jsx:17:       const target = document.getElementById("google-signin-button");
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\AuthModal.jsx:23:           try { await signInWithGoogleCredential(credential); onClose(); }
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\AuthModal.jsx:57:         <div id="google-signin-button" className="flex min-h-10 justify-center" />
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\RightPanel.jsx:8:   const { userId } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\RightPanel.jsx:19:     if (!userId) { setProfile(null); setSummary(null); return; }
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\RightPanel.jsx:20:     api.getProfile(userId).then(setProfile).catch(() => setProfile(null));
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\RightPanel.jsx:21:     api.applicationsSummary(userId).then(setSummary).catch(() => {});
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\RightPanel.jsx:22:   }, [userId]);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\RightPanel.jsx:44:         {!userId ? (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\RightPanel.jsx:57:       {userId && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\Sidebar.jsx:18:   const { userId, user, logout } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\Sidebar.jsx:35:           const locked = !guest && !userId;
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\components\Sidebar.jsx:53:         {userId ? (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:6: // Simple local "session": stores the created backend user id in localStorage.
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:7: // This is intentionally minimal -- there's no auth/login system in scope here,
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:10:   const [userId, setUserId] = useState(() => {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:11:     const saved = localStorage.getItem("aica_user_id");
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:18:     if (!userId) return;
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:20:     api.getUser(userId).then(setUser).catch(() => {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:21:       localStorage.removeItem("aica_user_id");
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:22:       setUserId(null);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:24:   }, [userId]);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:27:     const created = await api.createUser(data);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:28:     localStorage.setItem("aica_user_id", created.id);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:29:     setUserId(created.id);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:34:   async function signInWithGoogleCredential(credential) {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:35:     const account = await api.googleSignIn(credential);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:36:     localStorage.setItem("aica_user_id", String(account.id));
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:37:     setUserId(account.id); setUser(account);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:42:     localStorage.removeItem("aica_user_id");
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:43:     setUserId(null);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\context\UserContext.jsx:48:     <UserContext.Provider value={{ userId, user, loading, createAndSetUser, signInWithGoogleCredential, logout }}>
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\AutoApply.jsx:9:   const { userId } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\AutoApply.jsx:19:     if (userId) {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\AutoApply.jsx:20:       api.getUser(userId).then((u) => setManual((m) => ({ ...m, name: u.name, email: u.email, phone: u.phone || "" }))).catch(() => {});
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\AutoApply.jsx:21:       api.getProfile(userId).then((p) => setManual((m) => ({ ...m, location: p.location || "" }))).catch(() => {});
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\AutoApply.jsx:23:   }, [userId]);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\AutoApply.jsx:29:       const r = userId
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\AutoApply.jsx:30:         ? await api.autofillWithAccount({ url, user_id: userId, profile_overrides: manual, headless })
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\AutoApply.jsx:41:     if (!userId) return;
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\AutoApply.jsx:43:       await api.createApplication(userId, {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\AutoApply.jsx:98:             {result.status?.startsWith("paused") && userId && !tracked && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Chat.jsx:7:   const { userId } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Chat.jsx:21:       const r = await api.chat({ user_id: userId, message: userMsg.text });
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Chat.jsx:30:   if (!userId) {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:15:   const { userId, user } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:27:     if (!userId) { setSummary(null); setProfile(null); setResumeCount(null); return; }
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:28:     api.applicationsSummary(userId).then(setSummary).catch(() => {});
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:29:     api.getProfile(userId).then(setProfile).catch(() => setProfile(null));
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:30:     api.listResumes(userId).then((r) => setResumeCount(r.length)).catch(() => {});
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:31:   }, [userId]);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:44:         {!userId && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:54:           <p className="text-3xl font-bold text-indigo-600">{summary?.total ?? (userId ? "–" : "—")}</p>
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:59:             {!userId && <p className="text-xs text-slate-400">Sign in to track applications.</p>}
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:63:           <p className="text-3xl font-bold text-indigo-600">{resumeCount ?? (userId ? "–" : "—")}</p>
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:64:           <p className="mt-1 text-sm text-slate-500">{userId ? "Master + tailored versions saved" : "Sign in to save versions"}</p>
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:83:       {userId && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Dashboard.jsx:104:               onClick={() => (a.guest || userId ? navigate(a.type) : onRequestAuth())}
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Interview.jsx:36:   const { userId } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Interview.jsx:54:     api.interviewHistory(userId).then(setHistory).catch(() => {});
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Interview.jsx:56:   useEffect(() => { if (userId) loadHistory(); }, [userId]);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Interview.jsx:78:       if (userId) {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Interview.jsx:80:           user_id: userId, interview_type: type, mode,
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Interview.jsx:102:       {!userId && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\JobLink.jsx:8:   const { userId } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\JobLink.jsx:39:       await api.createApplication(userId, { company: company || new URL(url).hostname.replace("www.", ""), job_title: parsed.title || "Untitled role", job_url: url });
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Jobs.jsx:14:   const { userId } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Jobs.jsx:17:   const [rankByProfile, setRankByProfile] = useState(!!userId);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Jobs.jsx:27:         ? await api.discoverRanked(query, 25, userId ? { userId } : { profileText: manualProfile })
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Jobs.jsx:39:       await api.createApplication(userId, { job_id: job.id || null, company: job.company, job_title: job.title, job_url: job.url });
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Jobs.jsx:64:           Rank by match to my {userId ? "saved resume" : "resume (paste below)"}
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Jobs.jsx:66:         {rankByProfile && !userId && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Profile.jsx:19:   const { userId } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Profile.jsx:29:     if (!userId) return;
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Profile.jsx:30:     api.getProfile(userId).then((p) => { setForm(p); setExists(true); }).catch(() => setExists(false));
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Profile.jsx:32:   useEffect(load, [userId]);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Profile.jsx:38:       const result = await api.upsertProfile(userId, form, exists);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Profile.jsx:46:       const result = await api.autoDetectProfile(userId, {});
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Profile.jsx:54:   if (!userId) {
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:28:   const { userId } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:50:     if (!userId) return;
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:51:     api.getMasterResume(userId).then((r) => { setMasterText(r.content); setHasMaster(true); })
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:55:     if (userId) api.listResumes(userId).then(setResumes).catch(() => {});
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:57:   useEffect(() => { loadMaster(); refreshList(); }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:62:     if (!userId) return onRequestAuth();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:66:       const saved = await api.uploadResume(userId, title, file);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:75:     if (!userId) return onRequestAuth();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:78:       await api.createResume(userId, { title, content: masterText, resume_type: "master" });
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:95:       const result = userId
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:96:         ? await api.tailorResume(userId, { master_resume_text: masterText, job_description: jd, export_format: fmt || null })
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:107:       const result = userId
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:108:         ? await api.exportResume(userId, { resume_markdown: editedResume, export_format: fmt })
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:115:     if (!userId) return onRequestAuth();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:119:       await api.createResume(userId, { title, content: editedResume, resume_type: "tailored" });
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:125:     if (!userId) return onRequestAuth();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:129:       await api.setMasterResume(userId, { content: editedResume, title });
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:138:     if (!userId) return onRequestAuth();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:142:       setDetected(await api.autoDetectProfile(userId, { resume_text: masterText }));
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:147:     ? (userId ? api.resumeDownloadUrl(userId, tailored.file_path) : api.guestDownloadUrl(tailored.file_path))
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:152:       {!userId && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:162:             {userId && hasMaster ? (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:171:                 {userId ? "No master resume saved yet — upload a PDF/DOCX or paste text below." : "Upload a PDF/DOCX or paste text below."}
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:178:                 {userId ? "Upload & use as master" : "Sign in to upload"}
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:180:               {!showPasteBox && (!hasMaster || !userId) && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:187:             {(showPasteBox || !userId) && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:192:                 {userId && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:200:             {userId && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:210:             {userId && resumes.filter((r) => r.resume_type !== "master").length > 0 && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Resume.jsx:264:           {userId && (
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Tracker.jsx:10:   const { userId } = useUser();
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Tracker.jsx:16:     api.listApplications(userId).then(setApps).catch((e) => setError(e.message));
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Tracker.jsx:18:   useEffect(() => { if (userId) refresh(); }, [userId]);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Tracker.jsx:24:       await api.createApplication(userId, form);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Tracker.jsx:31:     await api.updateApplicationStatus(userId, appId, status);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Tracker.jsx:36:     await api.deleteApplication(userId, appId);
+C:\Users\ADMIN\Downloads\AI_Career_Assistant\frontend\src\pages\Tracker.jsx:40:   if (!userId) {

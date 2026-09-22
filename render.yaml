@@ -1,0 +1,53 @@
+# Render Blueprint — deploy from the repository root.
+# Add secrets (GROQ_API_KEY, GOOGLE_CLIENT_ID) in the Render dashboard.
+services:
+  - type: web
+    name: ai-career-assistant-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-career-assistant-db
+          property: connectionString
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: llama-3.3-70b-versatile
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: INSPECTION_MODE
+        value: "true"
+
+  - type: web
+    name: ai-career-assistant-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: ai-career-assistant-api
+          property: host
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+databases:
+  - name: ai-career-assistant-db
+    databaseName: career_assistant
+    user: career_assistant_user

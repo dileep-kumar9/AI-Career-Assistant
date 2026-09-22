@@ -7,6 +7,14 @@ class Settings:
     APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./career_assistant.db")
+    # Render may provide postgres://; SQLAlchemy expects postgresql://.
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    elif DATABASE_URL.startswith("postgresql://"):
+        pass
+    # Render external URLs sometimes use postgres:// or postgres+psycopg2://.
+    if DATABASE_URL.startswith("postgresql+psycopg2://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg2://", "postgresql://", 1)
 
     # LLM provider: Groq (https://console.groq.com) -- genuinely free, no credit
     # card required, and very fast (runs open models like Llama 3.3 on their
@@ -23,7 +31,9 @@ class Settings:
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 
     # CORS - frontend origin(s), comma separated
-    CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",") if o.strip()]
+    CORS_ORIGINS = [o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",") if o.strip()]
+    # Optional temporary inspection mode: keeps API available without forcing auth UI.
+    INSPECTION_MODE = os.getenv("INSPECTION_MODE", "false").lower() in ("1", "true", "yes")
 
     # Job discovery (public, no-auth job board APIs)
     REMOTEOK_API = "https://remoteok.com/api"

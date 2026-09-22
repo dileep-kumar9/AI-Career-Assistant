@@ -1,5 +1,12 @@
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 from app.main import app
+
+
+def unique_email(prefix):
+    return f"{prefix}.{uuid4().hex}@example.com"
+
 
 client = TestClient(app)
 
@@ -14,7 +21,7 @@ def test_health():
 
 
 def test_user_and_profile_flow():
-    r = client.post("/users/", json={"name": "Test User", "email": "test.smoke@example.com"})
+    r = client.post("/users/", json={"name": "Test User", "email": unique_email("test.smoke")})
     assert r.status_code == 201
     uid = r.json()["id"]
 
@@ -51,7 +58,7 @@ def test_agent_prepare_end_to_end():
 
 
 def test_application_tracker_crud():
-    r = client.post("/users/", json={"name": "Tracker User", "email": "tracker.smoke@example.com"})
+    r = client.post("/users/", json={"name": "Tracker User", "email": unique_email("tracker.smoke")})
     uid = r.json()["id"]
 
     r = client.post(f"/users/{uid}/applications/", json={"company": "Acme", "job_title": "SWE"})
@@ -67,7 +74,7 @@ def test_application_tracker_crud():
 
 
 def test_interview_answer_persists():
-    r = client.post("/users/", json={"name": "Interview User", "email": "interview.smoke@example.com"})
+    r = client.post("/users/", json={"name": "Interview User", "email": unique_email("interview.smoke")})
     uid = r.json()["id"]
 
     r = client.post("/interview/answer", json={
@@ -100,7 +107,7 @@ def test_guest_parse_preview():
 
 
 def test_profile_auto_detect_from_resume():
-    r = client.post("/users/", json={"name": "Auto User", "email": "auto.smoke@example.com"})
+    r = client.post("/users/", json={"name": "Auto User", "email": unique_email("auto.smoke")})
     uid = r.json()["id"]
     client.post(f"/users/{uid}/resumes/", json={
         "title": "Master", "resume_type": "master",
@@ -114,7 +121,7 @@ def test_profile_auto_detect_from_resume():
 
 
 def test_resume_analyze_auto_resolves_from_saved_data():
-    r = client.post("/users/", json={"name": "Resolve User", "email": "resolve.smoke@example.com"})
+    r = client.post("/users/", json={"name": "Resolve User", "email": unique_email("resolve.smoke")})
     uid = r.json()["id"]
     client.post(f"/users/{uid}/resumes/", json={
         "title": "Master", "resume_type": "master", "content": "python django sql experience",
@@ -125,7 +132,7 @@ def test_resume_analyze_auto_resolves_from_saved_data():
 
 
 def test_master_resume_upserts_instead_of_duplicating():
-    r = client.post("/users/", json={"name": "MasterUser", "email": "master.smoke@example.com"})
+    r = client.post("/users/", json={"name": "MasterUser", "email": unique_email("master.smoke")})
     uid = r.json()["id"]
 
     r = client.get(f"/users/{uid}/resumes/master")
@@ -141,7 +148,7 @@ def test_master_resume_upserts_instead_of_duplicating():
 
 
 def test_promote_tailored_resume_to_master():
-    r = client.post("/users/", json={"name": "PromoteUser", "email": "promote.smoke@example.com"})
+    r = client.post("/users/", json={"name": "PromoteUser", "email": unique_email("promote.smoke")})
     uid = r.json()["id"]
     client.post(f"/users/{uid}/resumes/", json={"title": "Master", "resume_type": "master", "content": "original"})
 
@@ -162,7 +169,7 @@ def test_google_signin_returns_503_when_not_configured():
 
 def test_uploaded_resume_file_is_saved_and_retrievable():
     import io
-    r = client.post("/users/", json={"name": "FileUser", "email": "file.smoke@example.com"})
+    r = client.post("/users/", json={"name": "FileUser", "email": unique_email("file.smoke")})
     uid = r.json()["id"]
 
     files = {"file": ("resume.txt", io.BytesIO(b"Skills\nPython, SQL"), "text/plain")}
@@ -176,7 +183,7 @@ def test_uploaded_resume_file_is_saved_and_retrievable():
 
 
 def test_autofill_resolves_saved_resume_without_crashing():
-    r = client.post("/users/", json={"name": "AutofillUser", "email": "autofill.smoke@example.com"})
+    r = client.post("/users/", json={"name": "AutofillUser", "email": unique_email("autofill.smoke")})
     uid = r.json()["id"]
     r = client.post("/jobs/application/autofill", json={"url": "https://example.com/apply", "user_id": uid})
     assert r.status_code == 200

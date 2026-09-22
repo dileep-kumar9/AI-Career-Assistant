@@ -41,6 +41,7 @@ export default function Resume({ params = {}, onRequestAuth }) {
   const [promoted, setPromoted] = useState(false);
   const [previewMode, setPreviewMode] = useState("formatted");
   const [editedResume, setEditedResume] = useState("");
+  const [sourceMode, setSourceMode] = useState("master");
 
   // On open (and whenever the account changes), auto-load the saved master
   // resume -- this is THE resume from your uploaded PDF/DOCX, so you never
@@ -57,6 +58,17 @@ export default function Resume({ params = {}, onRequestAuth }) {
   useEffect(() => { loadMaster(); refreshList(); }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setBusy = (key, v) => setLoading((l) => ({ ...l, [key]: v }));
+
+  async function useProfileData() {
+    if (!userId) return onRequestAuth();
+    setBusy("profileSource", true); setError("");
+    try {
+      const result = await api.getProfileResumeSource(userId);
+      setMasterText(result.content); setSourceMode("profile");
+      setShowPasteBox(true);
+    } catch (e) { setError(e.message); }
+    finally { setBusy("profileSource", false); }
+  }
 
   async function uploadFile() {
     if (!userId) return onRequestAuth();
@@ -159,6 +171,17 @@ export default function Resume({ params = {}, onRequestAuth }) {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="1. Your master resume">
           <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <button type="button" onClick={useProfileData} className={`rounded-lg border p-3 text-left text-sm ${sourceMode === "profile" ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-300"}`}>
+                <strong className="block">Use Profile Data</strong><span className="text-xs text-slate-500">Build source from saved profile</span>
+              </button>
+              <button type="button" onClick={() => { setSourceMode("upload"); document.getElementById("resume-source-file")?.click(); }} className={`rounded-lg border p-3 text-left text-sm ${sourceMode === "upload" ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-300"}`}>
+                <strong className="block">Upload Resume</strong><span className="text-xs text-slate-500">PDF, DOCX, or TXT</span>
+              </button>
+              <button type="button" onClick={() => { setSourceMode("paste"); setShowPasteBox(true); }} className={`rounded-lg border p-3 text-left text-sm ${sourceMode === "paste" ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-300"}`}>
+                <strong className="block">Paste Text</strong><span className="text-xs text-slate-500">Use existing resume text</span>
+              </button>
+            </div>
             {userId && hasMaster ? (
               <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                 <span>Using your saved master resume — no need to re-upload.</span>
@@ -173,18 +196,16 @@ export default function Resume({ params = {}, onRequestAuth }) {
             )}
 
             <div className="flex flex-wrap items-center gap-2">
-              <input type="file" accept=".pdf,.docx,.txt" onChange={(e) => setFile(e.target.files[0])} className="text-sm" />
+              <input id="resume-source-file" type="file" accept=".pdf,.docx,.txt" onChange={(e) => { setFile(e.target.files[0]); setSourceMode("upload"); }} className="text-sm" />
               <Button onClick={uploadFile} loading={loading.upload} disabled={!file}>
                 {userId ? "Upload & use as master" : "Sign in to upload"}
               </Button>
-              {!showPasteBox && (!hasMaster || !userId) && (
-                <button onClick={() => setShowPasteBox(true)} className="text-sm text-indigo-600 hover:underline">
-                  or paste text instead
-                </button>
-              )}
+              <button onClick={() => { setSourceMode("paste"); setShowPasteBox((v) => !v); }} className="text-sm text-indigo-600 hover:underline">
+                {showPasteBox ? "Hide text editor" : "Paste or edit resume text"}
+              </button>
             </div>
 
-            {(showPasteBox || !userId) && (
+            {(showPasteBox || !userId || sourceMode === "paste" || sourceMode === "profile") && (
               <>
                 <Input placeholder="Resume title" value={title} onChange={(e) => setTitle(e.target.value)} />
                 <TextArea rows={10} placeholder="Paste your resume text here…"

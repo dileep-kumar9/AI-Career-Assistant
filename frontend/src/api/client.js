@@ -1,8 +1,4 @@
-const configuredBase = (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/$/, "");
-// Render Blueprint can inject the backend host without a scheme.
-const BASE_URL = configuredBase && !/^https?:\/\//i.test(configuredBase)
-  ? `https://${configuredBase}`
-  : configuredBase;
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -29,6 +25,7 @@ export const api = {
   googleSignIn: (credential) => request("/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
 
   getProfile: (userId) => request(`/users/${userId}/profile/`),
+  getProfileResumeSource: (userId) => request(`/users/${userId}/profile/resume-source`),
   upsertProfile: (userId, data, exists) =>
     request(`/users/${userId}/profile/`, { method: exists ? "PUT" : "POST", body: JSON.stringify(data) }),
 
@@ -43,7 +40,7 @@ export const api = {
       method: "POST",
       body: form,
     }).then(async (r) => {
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) { let message = `${r.status}: ${r.statusText}`; try { const body = await r.json(); message = `${r.status}: ${body.detail || JSON.stringify(body)}`; } catch {} throw new Error(message); }
       return r.json();
     });
   },

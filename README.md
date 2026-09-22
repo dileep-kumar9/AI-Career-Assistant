@@ -152,3 +152,12 @@ frontend/src/
   api/        Single fetch-based client covering every backend endpoint
 docker/, docker-compose.yml   Container + Postgres setup
 ```
+
+## Render deployment notes
+
+- Configure the backend service root directory as `backend` and start it with `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+- Set `DATABASE_URL`, `GROQ_API_KEY`, `GOOGLE_CLIENT_ID`, and `CORS_ORIGINS` in the Render backend environment as applicable. Never commit `.env` files.
+- Configure the frontend's Vite API base URL as `VITE_API_BASE_URL` to the deployed API origin, then rebuild the static site.
+- The profile resume-source endpoint is `GET /users/{user_id}/profile/resume-source` and constructs canonical resume text from saved profile fields.
+- The current Google sign-in implementation verifies a Google ID credential and associates it with a local user record, but does not issue a server-side session/JWT or protect user-scoped routes. Treat this as identity convenience, not authorization, until server-side auth is implemented.
+- Resume files and exports are stored on local disk by default. Render instances have ephemeral filesystems unless a persistent disk is configured; use object storage or a persistent disk for durable uploads/exports in production.

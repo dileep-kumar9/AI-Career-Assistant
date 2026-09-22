@@ -30,8 +30,8 @@ def generate_study_plan(missing_skills: list[str], target_role: str = "") -> dic
         return {"provider": "n/a", "plan": []}
     prompt = f"{STUDY_PLAN_PROMPT}\n\nTarget role: {target_role}\nMissing skills: {missing_skills}"
     result = generate_json(prompt)
-    if result["provider"] == "groq" and result.get("data"):
-        return {"provider": "groq", "plan": result["data"].get("plan", [])}
+    if result["provider"] == "openai" and result.get("data"):
+        return {"provider": "openai", "plan": result["data"].get("plan", [])}
     plan = [{"skill": s, "why_it_matters": "Commonly required for this role.",
               "steps": [_CURATED.get(s.strip().lower(), f"Study {s} fundamentals and build a small project.")],
               "est_hours": 10} for s in missing_skills]

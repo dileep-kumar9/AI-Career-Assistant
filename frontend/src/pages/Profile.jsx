@@ -24,8 +24,6 @@ export default function Profile({ onRequestAuth }) {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [importNote, setImportNote] = useState("");
-  const [uploadingResume, setUploadingResume] = useState(false);
-  const [uploadNote, setUploadNote] = useState("");
 
   function load() {
     if (!userId) return;
@@ -40,16 +38,6 @@ export default function Profile({ onRequestAuth }) {
       const result = await api.upsertProfile(userId, form, exists);
       setForm(result); setExists(true); setSaved(true);
     } catch (err) { setError(err.message); } finally { setLoading(false); }
-  }
-
-  async function uploadMasterResume(file) {
-    if (!file) return;
-    setUploadingResume(true); setError(""); setUploadNote("");
-    try {
-      const saved = await api.uploadResume(userId, "Master Resume", file);
-      setUploadNote(`Saved ${file.name} as your master resume.`);
-    } catch (err) { setError(err.message || "Resume upload failed."); }
-    finally { setUploadingResume(false); }
   }
 
   async function importFromResume() {
@@ -77,16 +65,6 @@ export default function Profile({ onRequestAuth }) {
   return (
     <div className="max-w-3xl">
       <Card title="Your profile">
-        <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><h3 className="text-sm font-semibold text-slate-800">Master resume</h3><p className="mt-1 text-xs text-slate-500">Upload a PDF, DOCX, or TXT file here. It becomes available in Resume Maker and profile import.</p></div>
-            <label className={`inline-flex cursor-pointer items-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 ${uploadingResume ? "pointer-events-none opacity-60" : ""}`}>
-              {uploadingResume ? "Uploading…" : "Choose resume"}
-              <input type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" className="sr-only" disabled={uploadingResume} onChange={(e) => { const f=e.target.files?.[0]; e.target.value=""; if (f) uploadMasterResume(f); }} />
-            </label>
-          </div>
-          {uploadNote && <p role="status" className="mt-2 text-sm text-emerald-700">{uploadNote}</p>}
-        </div>
         <div className="mb-4 flex items-center justify-between rounded-lg bg-indigo-50 px-4 py-3">
           <div>
             <p className="text-sm font-medium text-indigo-900">Auto-detect from resume</p>

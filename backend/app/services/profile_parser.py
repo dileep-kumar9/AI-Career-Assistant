@@ -1,7 +1,7 @@
 """
 Parse a resume's raw text into structured profile fields automatically.
 
-Real LLM-based extraction when GROQ_API_KEY is configured; a genuine
+Real LLM-based extraction when OPENAI_API_KEY is configured; a genuine
 (non-trivial) heuristic section-splitter fallback otherwise, so "auto-detect
 profile from resume" works either way.
 """
@@ -93,8 +93,8 @@ def parse_resume_to_profile(resume_text: str) -> dict:
         return {"provider": "error", "fields": {}, "message": "resume_text is empty."}
 
     result = generate_json(f"{PROFILE_EXTRACTION_PROMPT}\n\nResume text:\n{resume_text}")
-    if result["provider"] == "groq" and result.get("data"):
-        return {"provider": "groq", "fields": result["data"]}
+    if result["provider"] == "openai" and result.get("data"):
+        return {"provider": "openai", "fields": result["data"]}
 
     return {"provider": "fallback", "fields": _heuristic_parse(resume_text),
              "message": result.get("message", "No LLM configured -- used section-header heuristic parsing instead.")}

@@ -55,7 +55,7 @@ def rag_answer(query: str, documents: list[str], top_k: int = 4) -> dict:
     context_block = context if hits else "No relevant profile/resume context was available. Give general advice and do not assume facts about the user."
     prompt = f"{CAREER_CHAT_PROMPT}\n\nRetrieved context:\n{context_block}\n\nQuestion: {query}"
     result = generate(prompt)
-    if result["provider"] == "groq":
+    if result["provider"] == "openai":
         answer = result["text"]
     else:
         # A helpful deterministic fallback rather than an empty chat response.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { UserProvider } from "./context/UserContext";
 import { WorkspaceProvider, useWorkspace } from "./context/WorkspaceContext";
 import Sidebar from "./components/Sidebar";
@@ -27,7 +27,7 @@ const PAGES = {
   chat: Chat,
 };
 
-function Workbench({ onRequestAuth, theme, onToggleTheme }) {
+function Workbench({ onRequestAuth }) {
   const { page, params, navigate } = useWorkspace();
   const Page = PAGES[page] || Dashboard;
 
@@ -35,9 +35,9 @@ function Workbench({ onRequestAuth, theme, onToggleTheme }) {
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50">
       <Sidebar onRequestAuth={onRequestAuth} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar theme={theme} onToggleTheme={onToggleTheme} />
-        <main className="min-w-0 flex-1 overflow-y-auto p-5 md:p-8">
-          <div className="mx-auto w-full max-w-[1440px]">
+        <Topbar />
+        <main className="min-w-0 flex-1 overflow-y-auto p-6">
+          <div className="mx-auto max-w-5xl">
             <Page params={params} onRequestAuth={onRequestAuth} navigate={navigate} />
           </div>
         </main>
@@ -48,15 +48,10 @@ function Workbench({ onRequestAuth, theme, onToggleTheme }) {
 
 export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem("aca-theme") || "light");
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem("aca-theme", theme);
-  }, [theme]);
   return (
     <UserProvider>
       <WorkspaceProvider>
-        <Workbench theme={theme} onToggleTheme={() => setTheme((t) => t === "light" ? "dark" : "light")} onRequestAuth={() => setAuthOpen(true)} />
+        <Workbench onRequestAuth={() => setAuthOpen(true)} />
         <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
       </WorkspaceProvider>
     </UserProvider>

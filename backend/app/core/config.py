@@ -8,13 +8,9 @@ class Settings:
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./career_assistant.db")
 
-    # LLM provider: Groq (https://console.groq.com) -- genuinely free, no credit
-    # card required, and very fast (runs open models like Llama 3.3 on their
-    # LPU hardware). Free tier is rate-limited (requests/min + tokens/min) but
-    # plenty for a personal project. If no key is set, AI endpoints fall back
-    # to clearly-labeled rule-based output instead of failing.
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-    LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
+    # OpenAI API (usage may be billable; no key is required for fallback mode).
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
     LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
 
     # Google Sign-In (optional). Get a client ID at console.cloud.google.com

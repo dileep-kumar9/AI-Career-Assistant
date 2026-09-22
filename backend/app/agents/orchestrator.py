@@ -14,8 +14,8 @@ from app.ai.prompts import JD_ANALYSIS_PROMPT
 def analyze_jd(jd: str) -> dict:
     """Real JD parsing: LLM-structured when configured, keyword fallback otherwise."""
     result = generate_json(f"{JD_ANALYSIS_PROMPT}\n\nJob description:\n{jd}")
-    if result["provider"] == "groq" and result.get("data"):
-        return {"provider": "groq", **result["data"]}
+    if result["provider"] == "openai" and result.get("data"):
+        return {"provider": "openai", **result["data"]}
     # Fallback: crude keyword extraction as required_skills (stopwords filtered)
     import re
     _STOP = {"and", "the", "with", "for", "you", "your", "are", "our", "will", "this", "that",

@@ -106,14 +106,14 @@ def tailor_resume(master_resume_text: str, job_description: str) -> dict:
 
     prompt = f"{RESUME_TAILOR_PROMPT}\n\nMaster resume:\n{master_resume_text}\n\nJob description:\n{job_description}"
     result = generate(prompt, max_tokens=1800)
-    if result["provider"] == "groq":
-        return {"provider": "groq", "resume_markdown": result["text"]}
+    if result["provider"] == "openai":
+        return {"provider": "openai", "resume_markdown": result["text"]}
 
     # Fallback: keep every fact, just resurface it under standard headings so the
     # feature is still usable end-to-end without an API key.
     fallback = (
         "# Resume (heuristic fallback — no LLM key configured)\n\n"
-        "## Summary\nSee experience and skills below (tailored rewriting requires GROQ_API_KEY).\n\n"
+        "## Summary\nSee experience and skills below (tailored rewriting requires OPENAI_API_KEY).\n\n"
         f"## Original Content\n{master_resume_text}\n"
     )
     return {"provider": "fallback", "resume_markdown": fallback, "message": result.get("message", "")}

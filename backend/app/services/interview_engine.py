@@ -21,20 +21,13 @@ def next_questions(kind: str = "HR", job_description: str = "", n: int = 4) -> d
               f"Job description (if provided):\n{job_description or 'Not provided'}\n"
               f"Generate {max(1, min(int(n), 20))} questions. Return JSON with a questions array.")
     result = generate_json(prompt)
-    generated = result.get("data", {}).get("questions", []) if result.get("provider") == "groq" else []
+    generated = result.get("data", {}).get("questions", []) if result.get("provider") == "openai" else []
     if isinstance(generated, list):
         generated = [str(q).strip() for q in generated if str(q).strip()]
     if generated:
-        return {"provider": "groq", "questions": generated[:max(1, min(int(n), 20))]}
+        return {"provider": "openai", "questions": generated[:max(1, min(int(n), 20))]}
     bank = QUESTIONS.get(kind, QUESTIONS["HR"])
-    if not bank:
-        bank = [
-            "Which responsibilities in this job description best match your experience, and why?",
-            "Describe a project or task that demonstrates a required skill for this role.",
-            "What would you prioritize during your first 30 days in this position?",
-            "Which requirement in this role would you need to develop further, and how would you approach it?",
-        ]
-    return {"provider": "fallback", "questions": bank[:max(1, min(int(n), 20))]}
+    return {"provider": "fallback", "questions": (bank or QUESTIONS["HR"])[:n]}
 
 
 def evaluate_answer(question: str, answer: str, expected_topics: list[str] | None = None) -> dict:
@@ -43,9 +36,9 @@ def evaluate_answer(question: str, answer: str, expected_topics: list[str] | Non
     expected_topics = expected_topics or []
     prompt = f"{INTERVIEW_EVALUATION_PROMPT}\n\nQuestion: {question}\nAnswer: {answer}\nExpected topics (optional): {expected_topics}"
     result = generate_json(prompt)
-    if result["provider"] == "groq" and result.get("data"):
+    if result["provider"] == "openai" and result.get("data"):
         d = result["data"]
-        return {"provider": "groq", "score": d.get("score"), "strengths": d.get("strengths", []),
+        return {"provider": "openai", "score": d.get("score"), "strengths": d.get("strengths", []),
                 "improvements": d.get("improvements", []), "feedback": d.get("feedback", "")}
 
     hits = [t for t in expected_topics if t.lower() in answer.lower()]
@@ -56,7 +49,7 @@ def evaluate_answer(question: str, answer: str, expected_topics: list[str] | Non
         "score": score,
         "strengths": [f"Mentioned: {h}" for h in hits] or ["Answer submitted."],
         "improvements": ["Add concrete examples.", "Quantify impact where possible.",
-                          "Configure GROQ_API_KEY for a real evaluation instead of this heuristic."],
+                          "Configure OPENAI_API_KEY for a real evaluation instead of this heuristic."],
         "feedback": f"Heuristic score based on length and topic overlap ({len(hits)}/{len(expected_topics)} expected topics hit).",
     }
 

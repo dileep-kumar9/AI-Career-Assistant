@@ -29,40 +29,15 @@ const PAGES = {
 
 function Workbench({ onRequestAuth }) {
   const { page, params, navigate } = useWorkspace();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const Page = PAGES[page] || Dashboard;
 
   return (
-    <div className="app-shell flex h-[100dvh] w-screen overflow-hidden">
-      {mobileNavOpen && (
-        <button
-          type="button"
-          aria-label="Close navigation menu"
-          className="fixed inset-0 z-40 bg-slate-950/60 md:hidden"
-          onClick={() => setMobileNavOpen(false)}
-        />
-      )}
-      <Sidebar
-        onRequestAuth={onRequestAuth}
-        mobileOpen={mobileNavOpen}
-        onNavigate={() => setMobileNavOpen(false)}
-      />
+    <div className="flex h-screen w-screen overflow-hidden bg-slate-50">
+      <Sidebar onRequestAuth={onRequestAuth} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex min-w-0 items-center gap-3 border-b border-slate-200/70 bg-white/90 px-4 py-2 md:hidden">
-          <button
-            type="button"
-            aria-label="Open navigation menu"
-            aria-expanded={mobileNavOpen}
-            onClick={() => setMobileNavOpen(true)}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-          >
-            ☰ <span className="ml-1">Menu</span>
-          </button>
-          <span className="truncate text-sm font-semibold text-slate-800">Career Assistant</span>
-        </div>
         <Topbar />
-        <main className="min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
-          <div className="mx-auto w-full max-w-7xl">
+        <main className="min-w-0 flex-1 overflow-y-auto p-6">
+          <div className="mx-auto max-w-5xl">
             <Page params={params} onRequestAuth={onRequestAuth} navigate={navigate} />
           </div>
         </main>

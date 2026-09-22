@@ -21,14 +21,6 @@ export default function Jobs() {
   const [error, setError] = useState("");
 
   async function search() {
-    if (query.trim().length > 120) {
-      setError("Search terms must be 120 characters or fewer.");
-      return;
-    }
-    if (rankByProfile && !userId && !manualProfile.trim()) {
-      setError("Paste your resume or skills before ranking jobs.");
-      return;
-    }
     setLoading(true); setError("");
     try {
       const results = rankByProfile
@@ -43,10 +35,6 @@ export default function Jobs() {
   }
 
   async function logApplication(job) {
-    if (!userId) {
-      setError("Sign in to track a job in your application tracker.");
-      return;
-    }
     try {
       await api.createApplication(userId, { job_id: job.id || null, company: job.company, job_title: job.title, job_url: job.url });
     } catch (e) { setError(e.message); }
@@ -97,9 +85,7 @@ export default function Jobs() {
                 )}
               </div>
             </div>
-            <p className="mt-2 line-clamp-3 whitespace-pre-line text-sm text-slate-600">
-              {(job.description || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").slice(0, 220)}
-            </p>
+            <p className="mt-2 line-clamp-3 text-sm text-slate-600" dangerouslySetInnerHTML={{ __html: (job.description || "").slice(0, 220) }} />
             <div className="mt-3 flex flex-wrap gap-3">
               {job.url && <a className="text-sm text-indigo-600 underline" href={job.url} target="_blank" rel="noreferrer">View posting</a>}
               <button className="text-sm text-slate-500 hover:text-indigo-600" onClick={() => logApplication(job)}>+ Track this job</button>

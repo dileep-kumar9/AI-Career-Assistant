@@ -32,12 +32,12 @@ function Workbench({ onRequestAuth }) {
   const Page = PAGES[page] || Dashboard;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-50">
+    <div className="app-shell flex h-screen w-screen overflow-hidden">
       <Sidebar onRequestAuth={onRequestAuth} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
-        <main className="min-w-0 flex-1 overflow-y-auto p-6">
-          <div className="mx-auto max-w-5xl">
+        <main className="min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-7xl">
             <Page params={params} onRequestAuth={onRequestAuth} navigate={navigate} />
           </div>
         </main>

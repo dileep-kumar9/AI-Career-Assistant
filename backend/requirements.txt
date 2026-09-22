@@ -26,3 +26,6 @@ playwright
 
 # Google Sign-In verification (optional -- app works without it)
 google-auth
+
+# Starlette TestClient transport used by the API smoke suite
+httpx

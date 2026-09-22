@@ -42,3 +42,31 @@ body {
 .resume-preview-full { min-height: 1112px; max-height: none; overflow-y: auto; }
 .resume-preview-full .resume-paper { width: min(100%, 760px); }
 @media (max-width: 1023px) { .resume-editor-split { grid-template-columns: 1fr; } .resume-editor { min-height: 520px; } .resume-preview-full { min-height: 0; max-height: none; } }
+
+/* Product-wide visual system: clean, calm, premium workspace */
+:root { --brand: #4f46e5; --ink: #172033; --muted: #667085; }
+body { background: #f5f7fb; color: var(--ink); }
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select {
+  border-radius: 12px !important; border-color: #dce2ec !important; background-color: #fff;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+input:focus, textarea:focus, select:focus { border-color: #818cf8 !important; box-shadow: 0 0 0 4px rgba(99,102,241,.10) !important; outline: none; }
+button { transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+main > div { padding-bottom: 2rem; }
+@media (min-width: 1024px) { aside { box-shadow: 8px 0 28px rgba(20,30,55,.05); } }
+
+/* Refined commercial workspace treatment */
+:root { --surface: #ffffff; --line: #e7eaf1; --brand-deep: #3730a3; }
+body { background: #f6f7fb; }
+button, a { -webkit-tap-highlight-color: transparent; }
+main { scroll-behavior: smooth; }
+main > div { max-width: 1540px; }
+main .rounded-xl.border { border-color: var(--line); }
+main h1 { letter-spacing: -.035em; }
+main h2 { letter-spacing: -.025em; }
+main input[type="file"]:focus-visible + span,
+main label:has(input[type="file"]:focus-visible) { outline: 3px solid rgba(99,102,241,.25); outline-offset: 3px; }
+@media (max-width: 640px) {
+  main { padding: 1rem !important; }
+  main .p-5 { padding: 1rem; }
+}

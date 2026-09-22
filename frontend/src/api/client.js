@@ -1,10 +1,17 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const configuredBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
+const isLocal = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const BASE_URL = (configuredBase || (isLocal ? "http://localhost:8000" : "https://ai-career-assistant-yuvh.onrender.com")).replace(/\/$/, "");
 
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+      ...options,
+    });
+  } catch (err) {
+    throw new Error(`Cannot reach the API at ${BASE_URL}. Check the backend deployment, API URL, and CORS settings. ${err?.message || ""}`.trim());
+  }
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -25,7 +32,6 @@ export const api = {
   googleSignIn: (credential) => request("/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
 
   getProfile: (userId) => request(`/users/${userId}/profile/`),
-  getProfileResumeSource: (userId) => request(`/users/${userId}/profile/resume-source`),
   upsertProfile: (userId, data, exists) =>
     request(`/users/${userId}/profile/`, { method: exists ? "PUT" : "POST", body: JSON.stringify(data) }),
 
@@ -40,8 +46,15 @@ export const api = {
       method: "POST",
       body: form,
     }).then(async (r) => {
-      if (!r.ok) { let message = `${r.status}: ${r.statusText}`; try { const body = await r.json(); message = `${r.status}: ${body.detail || JSON.stringify(body)}`; } catch {} throw new Error(message); }
+      if (!r.ok) {
+        let detail = r.statusText;
+        try { const body = await r.json(); detail = body.detail || JSON.stringify(body); } catch { try { detail = await r.text(); } catch {} }
+        throw new Error(`${r.status}: ${detail}`);
+      }
       return r.json();
+    }).catch((err) => {
+      if (err instanceof TypeError) throw new Error(`Cannot reach the API at ${BASE_URL}. Check the backend URL and CORS settings.`);
+      throw err;
     });
   },
   tailorResume: (userId, data) => request(`/users/${userId}/resumes/tailor`, { method: "POST", body: JSON.stringify(data) }),

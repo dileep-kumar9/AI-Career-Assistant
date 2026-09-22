@@ -27,22 +27,12 @@ export default function Chat({ onRequestAuth }) {
     }
   }
 
-  if (!userId) {
-    return (
-      <div className="mx-auto max-w-md">
-        <Card title="Sign in for career chat">
-          <p className="mb-3 text-sm text-slate-500">Chat answers are grounded in your saved profile and resumes, so this needs an account.</p>
-          <Button onClick={onRequestAuth}>Sign in / create account</Button>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto max-w-2xl">
       <Card title="Career chat">
         <p className="mb-3 text-sm text-slate-500">
-          Answers are grounded (RAG) in your own saved profile and resumes — fill those in first for better answers.
+          {userId ? "Answers can use relevant details from your saved profile and resumes." : "Guest chat is available. Sign in to get answers grounded in your saved profile and resumes and keep your account history."}
+          {!userId && <> <button onClick={onRequestAuth} className="font-medium underline">Sign in</button></>}
         </p>
         <div className="mb-3 max-h-[28rem] space-y-3 overflow-y-auto">
           {messages.map((m, i) => (
@@ -58,7 +48,7 @@ export default function Chat({ onRequestAuth }) {
         <ErrorBanner message={error} />
         <form onSubmit={send} className="flex gap-2">
           <Input placeholder="Ask something…" value={input} onChange={(e) => setInput(e.target.value)} />
-          <Button type="submit" loading={loading}>Send</Button>
+          <Button type="submit" loading={loading} disabled={!input.trim() || loading}>Send</Button>
         </form>
       </Card>
     </div>

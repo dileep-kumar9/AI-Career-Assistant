@@ -79,8 +79,8 @@ def rag(req: RagRequest):
 @router.post("/chat")
 def chat(req: ChatRequest, db: Session = Depends(get_db)):
     """Career chat grounded in the user's own stored profile + resumes (RAG)."""
-    profile = db.query(UserProfile).filter(UserProfile.user_id == req.user_id).first()
-    resumes = db.query(Resume).filter(Resume.user_id == req.user_id).all()
+    profile = db.query(UserProfile).filter(UserProfile.user_id == req.user_id).first() if req.user_id else None
+    resumes = db.query(Resume).filter(Resume.user_id == req.user_id).all() if req.user_id else []
     documents = []
     if profile:
         documents.append(" ".join(filter(None, [

@@ -111,11 +111,12 @@ def tailor_resume(master_resume_text: str, job_description: str) -> dict:
 
     # Fallback: keep every fact, just resurface it under standard headings so the
     # feature is still usable end-to-end without an API key.
-    # Preserve the source resume verbatim in fallback mode. Do not prepend a
-    # pseudo-resume wrapper that can be mistaken for source content on later runs.
-    fallback = master_resume_text.strip()
-    return {"provider": "fallback", "resume_markdown": fallback,
-            "message": result.get("message", "Groq unavailable; returned the original resume without rewriting.")}
+    fallback = (
+        "# Resume (heuristic fallback — no LLM key configured)\n\n"
+        "## Summary\nSee experience and skills below (tailored rewriting requires GROQ_API_KEY).\n\n"
+        f"## Original Content\n{master_resume_text}\n"
+    )
+    return {"provider": "fallback", "resume_markdown": fallback, "message": result.get("message", "")}
 
 
 def export_resume(resume_markdown: str, fmt: str = "docx") -> str:

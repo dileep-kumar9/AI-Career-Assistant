@@ -24,9 +24,8 @@ export default function Profile({ onRequestAuth }) {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [importNote, setImportNote] = useState("");
-  const [resumeFile, setResumeFile] = useState(null);
-  const [resumeText, setResumeText] = useState("");
-  const [resumeBusy, setResumeBusy] = useState(false);
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [uploadNote, setUploadNote] = useState("");
 
   function load() {
     if (!userId) return;
@@ -43,32 +42,24 @@ export default function Profile({ onRequestAuth }) {
     } catch (err) { setError(err.message); } finally { setLoading(false); }
   }
 
-  async function parseAndReview(text) {
-    if (!text.trim()) throw new Error("Resume text is empty.");
-    const parsed = await api.guestParsePreview(text);
-    const fields = parsed.fields || {};
-    setForm((current) => ({ ...current, ...fields }));
-    setImportNote("Resume information extracted. Review and edit the fields below, then click Save profile.");
-  }
-
-  async function uploadAndExtract() {
-    if (!userId) return onRequestAuth();
-    if (!resumeFile) { setError("Choose a PDF, DOCX, or TXT resume first."); return; }
-    setResumeBusy(true); setError(""); setImportNote("");
+  async function uploadMasterResume(file) {
+    if (!file) return;
+    setUploadingResume(true); setError(""); setUploadNote("");
     try {
-      const saved = await api.uploadResume(userId, "Master Resume", resumeFile);
-      await parseAndReview(saved.content || "");
-    } catch (err) { setError(err.message); }
-    finally { setResumeBusy(false); }
+      const saved = await api.uploadResume(userId, "Master Resume", file);
+      setUploadNote(`Saved ${file.name} as your master resume.`);
+    } catch (err) { setError(err.message || "Resume upload failed."); }
+    finally { setUploadingResume(false); }
   }
 
   async function importFromResume() {
     setImporting(true); setError(""); setImportNote("");
     try {
-      const master = await api.getMasterResume(userId);
-      await parseAndReview(master.content || "");
+      const result = await api.autoDetectProfile(userId, {});
+      setForm(result); setExists(true);
+      setImportNote("Fields below were auto-detected from your saved master resume — review and adjust as needed, then save.");
     } catch (err) {
-      setError(err.message.includes("404") ? "No saved master resume found. Upload one below or paste its text." : err.message);
+      setError(err.message.includes("400") ? "No saved master resume found — upload one in Resume Maker first, then import here." : err.message);
     } finally { setImporting(false); }
   }
 
@@ -86,17 +77,16 @@ export default function Profile({ onRequestAuth }) {
   return (
     <div className="max-w-3xl">
       <Card title="Your profile">
-        <section className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <h3 className="font-semibold text-slate-800">Resume / Master Resume</h3>
-          <p className="mt-1 text-sm text-slate-500">Upload a PDF, DOCX, or TXT file, or paste resume text. Extracted information will populate the form for your review.</p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input type="file" accept=".pdf,.docx,.txt" onChange={(e) => setResumeFile(e.target.files?.[0] || null)} className="max-w-full text-sm" />
-            <Button onClick={uploadAndExtract} loading={resumeBusy} disabled={!resumeFile}>Upload & extract</Button>
+        <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h3 className="text-sm font-semibold text-slate-800">Master resume</h3><p className="mt-1 text-xs text-slate-500">Upload a PDF, DOCX, or TXT file here. It becomes available in Resume Maker and profile import.</p></div>
+            <label className={`inline-flex cursor-pointer items-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 ${uploadingResume ? "pointer-events-none opacity-60" : ""}`}>
+              {uploadingResume ? "Uploading…" : "Choose resume"}
+              <input type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" className="sr-only" disabled={uploadingResume} onChange={(e) => { const f=e.target.files?.[0]; e.target.value=""; if (f) uploadMasterResume(f); }} />
+            </label>
           </div>
-          <label className="mt-4 block text-sm font-medium text-slate-600">Or paste resume text</label>
-          <TextArea rows={5} value={resumeText} onChange={(e) => setResumeText(e.target.value)} placeholder="Paste your resume here…" />
-          <Button variant="secondary" className="mt-2" disabled={!resumeText.trim()} loading={resumeBusy} onClick={async () => { setResumeBusy(true); setError(""); try { await api.createResume(userId, { title: "Master Resume", content: resumeText, resume_type: "master" }); await parseAndReview(resumeText); } catch (e) { setError(e.message); } finally { setResumeBusy(false); } }}>Save master & extract</Button>
-        </section>
+          {uploadNote && <p role="status" className="mt-2 text-sm text-emerald-700">{uploadNote}</p>}
+        </div>
         <div className="mb-4 flex items-center justify-between rounded-lg bg-indigo-50 px-4 py-3">
           <div>
             <p className="text-sm font-medium text-indigo-900">Auto-detect from resume</p>

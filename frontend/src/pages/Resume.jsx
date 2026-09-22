@@ -32,6 +32,7 @@ export default function Resume({ params = {}, onRequestAuth }) {
   const [title, setTitle] = useState(params.prefillTitle ? `Tailored: ${params.prefillTitle}` : "Master Resume");
   const [file, setFile] = useState(null);
   const [showPasteBox, setShowPasteBox] = useState(false);
+  const [resumeSource, setResumeSource] = useState("saved");
   const [jd, setJd] = useState(params.prefillJD || "");
   const [analysis, setAnalysis] = useState(null);
   const [tailored, setTailored] = useState(null);
@@ -41,7 +42,6 @@ export default function Resume({ params = {}, onRequestAuth }) {
   const [promoted, setPromoted] = useState(false);
   const [previewMode, setPreviewMode] = useState("formatted");
   const [editedResume, setEditedResume] = useState("");
-  const [sourceMode, setSourceMode] = useState("master");
 
   // On open (and whenever the account changes), auto-load the saved master
   // resume -- this is THE resume from your uploaded PDF/DOCX, so you never
@@ -59,23 +59,24 @@ export default function Resume({ params = {}, onRequestAuth }) {
 
   const setBusy = (key, v) => setLoading((l) => ({ ...l, [key]: v }));
 
-  async function useProfileData() {
+  async function useProfileResume() {
     if (!userId) return onRequestAuth();
     setBusy("profileSource", true); setError("");
     try {
-      const result = await api.getProfileResumeSource(userId);
-      setMasterText(result.content); setSourceMode("profile");
-      setShowPasteBox(true);
-    } catch (e) { setError(e.message); }
+      const p = await api.getProfile(userId);
+      const parts = [p.name && `# ${p.name}`, p.target_role && `Target Role: ${p.target_role}`, p.location && `Location: ${p.location}`, p.skills && `## Skills\n${p.skills}`, p.experience && `## Experience\n${p.experience}`, p.education && `## Education\n${p.education}`, p.projects && `## Projects\n${p.projects}`, p.certifications && `## Certifications\n${p.certifications}`, p.achievements && `## Achievements\n${p.achievements}`].filter(Boolean);
+      if (!parts.length) throw new Error("Your profile is empty. Add profile details first, or upload/paste a resume.");
+      setMasterText(parts.join("\n\n")); setHasMaster(false); setShowPasteBox(true);
+    } catch (e) { setError(e.message || "Could not load profile details."); }
     finally { setBusy("profileSource", false); }
   }
 
-  async function uploadFile() {
+  async function uploadFile(selectedFile = file) {
     if (!userId) return onRequestAuth();
-    if (!file) return;
+    if (!selectedFile) return;
     setBusy("upload", true); setError("");
     try {
-      const saved = await api.uploadResume(userId, title, file);
+      const saved = await api.uploadResume(userId, title, selectedFile);
       setMasterText(saved.content);
       setHasMaster(true);
       setShowPasteBox(false);
@@ -169,19 +170,12 @@ export default function Resume({ params = {}, onRequestAuth }) {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card title="1. Your master resume">
+        <Card title="1. Resume source">
+          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="Choose resume source">
+            {[ ["saved","Saved master"], ["upload","Upload file"], ["profile","Use profile"] ].map(([value,label]) => <button type="button" key={value} onClick={() => { setResumeSource(value); if (value === "profile") useProfileResume(); if (value === "upload") document.getElementById("resume-source-file")?.click(); if (value === "saved") loadMaster(); }} className={`rounded-lg border px-3 py-2.5 text-sm font-semibold ${resumeSource===value ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>{label}</button>)}
+            <input id="resume-source-file" type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" className="hidden" onChange={(e) => { const chosen=e.target.files?.[0]; e.target.value=""; if (chosen) { setFile(chosen); uploadFile(chosen); } }} />
+          </div>
           <div className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-3">
-              <button type="button" onClick={useProfileData} className={`rounded-lg border p-3 text-left text-sm ${sourceMode === "profile" ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-300"}`}>
-                <strong className="block">Use Profile Data</strong><span className="text-xs text-slate-500">Build source from saved profile</span>
-              </button>
-              <button type="button" onClick={() => { setSourceMode("upload"); document.getElementById("resume-source-file")?.click(); }} className={`rounded-lg border p-3 text-left text-sm ${sourceMode === "upload" ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-300"}`}>
-                <strong className="block">Upload Resume</strong><span className="text-xs text-slate-500">PDF, DOCX, or TXT</span>
-              </button>
-              <button type="button" onClick={() => { setSourceMode("paste"); setShowPasteBox(true); }} className={`rounded-lg border p-3 text-left text-sm ${sourceMode === "paste" ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-300"}`}>
-                <strong className="block">Paste Text</strong><span className="text-xs text-slate-500">Use existing resume text</span>
-              </button>
-            </div>
             {userId && hasMaster ? (
               <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                 <span>Using your saved master resume — no need to re-upload.</span>
@@ -195,17 +189,20 @@ export default function Resume({ params = {}, onRequestAuth }) {
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-2">
-              <input id="resume-source-file" type="file" accept=".pdf,.docx,.txt" onChange={(e) => { setFile(e.target.files[0]); setSourceMode("upload"); }} className="text-sm" />
-              <Button onClick={uploadFile} loading={loading.upload} disabled={!file}>
-                {userId ? "Upload & use as master" : "Sign in to upload"}
-              </Button>
-              <button onClick={() => { setSourceMode("paste"); setShowPasteBox((v) => !v); }} className="text-sm text-indigo-600 hover:underline">
-                {showPasteBox ? "Hide text editor" : "Paste or edit resume text"}
-              </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50">
+                {loading.upload ? "Uploading resume…" : "Choose resume file"}
+                <input type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" className="sr-only" disabled={loading.upload} onChange={(e) => { const chosen = e.target.files?.[0]; if (chosen) { setFile(chosen); if (userId) uploadFile(chosen); else onRequestAuth(); } e.target.value = ""; }} />
+              </label>
+              <span className="text-sm text-slate-500">{file?.name || "PDF, DOCX, or TXT · select to upload and save as master"}</span>
+              {!showPasteBox && (!hasMaster || !userId) && (
+                <button onClick={() => setShowPasteBox(true)} className="text-sm text-indigo-600 hover:underline">
+                  or paste text instead
+                </button>
+              )}
             </div>
 
-            {(showPasteBox || !userId || sourceMode === "paste" || sourceMode === "profile") && (
+            {(showPasteBox || !userId) && (
               <>
                 <Input placeholder="Resume title" value={title} onChange={(e) => setTitle(e.target.value)} />
                 <TextArea rows={10} placeholder="Paste your resume text here…"

@@ -66,20 +66,3 @@ def from_resume(user_id: int, req: ParseFromResumeRequest, db: Session = Depends
     existing = get_profile(db, user_id)
     obj = update_profile(db, user_id, data) if existing else create_profile(db, user_id, data)
     return obj
-
-
-@router.get("/resume-source")
-def resume_source(user_id: int, db: Session = Depends(get_db)):
-    """Build a canonical resume source from saved profile fields on the server."""
-    profile = get_profile(db, user_id)
-    if not profile:
-        raise HTTPException(404, "Profile not found. Complete and save your profile first.")
-    sections = [("Professional Summary", profile.target_role), ("Location", profile.location),
-                ("Work Preference", profile.work_preference), ("Skills", profile.skills),
-                ("Experience", profile.experience), ("Education", profile.education),
-                ("Projects", profile.projects), ("Certifications", profile.certifications),
-                ("Achievements", profile.achievements)]
-    text = "\n\n".join(f"## {heading}\n{value.strip()}" for heading, value in sections if value and value.strip())
-    if not text:
-        raise HTTPException(400, "Your profile has no resume information yet. Add profile details first.")
-    return {"content": text, "source": "profile"}

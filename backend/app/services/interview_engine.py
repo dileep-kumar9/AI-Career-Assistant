@@ -17,13 +17,24 @@ QUESTIONS = {
 def next_questions(kind: str = "HR", job_description: str = "", n: int = 4) -> dict:
     """Real question generation: JD-specific / any type uses the LLM when configured
     to produce genuinely tailored questions; otherwise returns the static bank."""
-    if job_description.strip():
-        prompt = f"{INTERVIEW_QUESTION_PROMPT}\n\nInterview type: {kind}\nJob description:\n{job_description}\nNumber of questions: {n}"
-        result = generate_json(prompt)
-        if result["provider"] == "groq" and result.get("data", {}).get("questions"):
-            return {"provider": "groq", "questions": result["data"]["questions"][:n]}
+    prompt = (f"{INTERVIEW_QUESTION_PROMPT}\n\nInterview type: {kind}\n"
+              f"Job description (if provided):\n{job_description or 'Not provided'}\n"
+              f"Generate {max(1, min(int(n), 20))} questions. Return JSON with a questions array.")
+    result = generate_json(prompt)
+    generated = result.get("data", {}).get("questions", []) if result.get("provider") == "groq" else []
+    if isinstance(generated, list):
+        generated = [str(q).strip() for q in generated if str(q).strip()]
+    if generated:
+        return {"provider": "groq", "questions": generated[:max(1, min(int(n), 20))]}
     bank = QUESTIONS.get(kind, QUESTIONS["HR"])
-    return {"provider": "fallback", "questions": (bank or QUESTIONS["HR"])[:n]}
+    if not bank:
+        bank = [
+            "Which responsibilities in this job description best match your experience, and why?",
+            "Describe a project or task that demonstrates a required skill for this role.",
+            "What would you prioritize during your first 30 days in this position?",
+            "Which requirement in this role would you need to develop further, and how would you approach it?",
+        ]
+    return {"provider": "fallback", "questions": bank[:max(1, min(int(n), 20))]}
 
 
 def evaluate_answer(question: str, answer: str, expected_topics: list[str] | None = None) -> dict:

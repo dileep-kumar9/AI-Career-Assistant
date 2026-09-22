@@ -23,7 +23,7 @@ class RagRequest(BaseModel):
     documents: list[str]
 
 class ChatRequest(BaseModel):
-    user_id: int
+    user_id: int | None = None
     message: str
 
 class AgentPrepareRequest(BaseModel):

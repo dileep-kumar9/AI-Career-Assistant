@@ -49,15 +49,20 @@ def retrieve(query: str, documents: list[str], top_k: int = 4) -> list[dict]:
 def rag_answer(query: str, documents: list[str], top_k: int = 4) -> dict:
     hits = retrieve(query, documents, top_k)
     context = "\n---\n".join(h["text"] for h in hits)
-    if not hits:
-        return {"query": query, "context": [], "answer": "No relevant context was found in the supplied documents.",
-                "provider": "fallback"}
-    prompt = f"{CAREER_CHAT_PROMPT}\n\nRetrieved context:\n{context}\n\nQuestion: {query}"
+    # Career chat should still be useful when a user has not yet added a resume
+    # or when lexical retrieval finds no matching chunk. In that case answer as
+    # a general career assistant and explicitly avoid claiming personal context.
+    context_block = context if hits else "No relevant profile/resume context was available. Give general advice and do not assume facts about the user."
+    prompt = f"{CAREER_CHAT_PROMPT}\n\nRetrieved context:\n{context_block}\n\nQuestion: {query}"
     result = generate(prompt)
     if result["provider"] == "groq":
         answer = result["text"]
     else:
-        # Deterministic fallback: surface the retrieved context directly.
-        answer = ("LLM not configured -- here is the most relevant retrieved context for your question:\n\n"
-                   + context)
+        # A helpful deterministic fallback rather than an empty chat response.
+        if hits:
+            answer = ("AI chat is unavailable right now, so here is the relevant information I found in your saved materials.\n\n"
+                      + context)
+        else:
+            answer = ("I couldn't find matching details in your saved profile or resumes. Add your profile/resume for personalized guidance. "
+                      "In the meantime, tell me your target role, experience level, and question, and I can help with general career preparation once AI service is available.")
     return {"query": query, "context": hits, "answer": answer, "provider": result["provider"]}

@@ -73,6 +73,10 @@ export default function Interview({ onRequestAuth }) {
   }
 
   async function submit() {
+    if (!questions[current] || !answer.trim()) {
+      setError("Start an interview and enter an answer before submitting.");
+      return;
+    }
     setBusy("submit", true); setError("");
     try {
       if (userId) {
@@ -147,7 +151,7 @@ export default function Interview({ onRequestAuth }) {
             {result && (
               <div className="rounded-lg bg-slate-50 p-3 text-sm">
                 <div className="flex items-center gap-2">
-                  <Badge tone={result.feedback ? "indigo" : "slate"}>Feedback saved</Badge>
+                  <Badge tone={result.feedback ? "indigo" : "slate"}>{userId ? "Feedback saved" : "Answer evaluated (not saved)"}</Badge>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-slate-700">{result.feedback}</p>
               </div>

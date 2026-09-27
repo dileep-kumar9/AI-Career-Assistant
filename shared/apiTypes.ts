@@ -120,9 +120,9 @@ export interface ChatOffer {
   projects?: OfferedProject[];
 }
 
-// ------------------------------------------------------------------ automation (Job Apply Agent)
+// ------------------------------------------------------------------ automation resumes
 
-/** Who created a resume session: the user in the builder, or the Job Apply Agent. */
+/** Who created a resume session: you in the builder, or the automation (Single Job Apply / job agent). */
 export type SessionOrigin = 'manual' | 'automation';
 
 /** The job an automation resume was tailored for. */
@@ -145,37 +145,4 @@ export interface ResumeListItem {
   atsScore: number | null;
   origin: SessionOrigin;
   job: JobMeta | null;
-}
-
-export type ApplicationStatus = 'found' | 'tailoring' | 'ready' | 'applying' | 'applied' | 'needs_attention' | 'skipped' | 'failed';
-
-export interface ApplicationAnswer {
-  question: string;
-  answer: string;
-  source: 'profile' | 'saved' | 'ai' | 'user';
-}
-
-/** A job the agent found, prepared or applied to (job_applications). */
-export interface JobApplication {
-  id: string;
-  jobTitle: string;
-  company: string;
-  location: string;
-  jobUrl: string;
-  applyUrl: string;
-  /** greenhouse | lever | ashby | workday | linkedin | naukri | indeed | pasted | … */
-  source: string;
-  status: ApplicationStatus;
-  matchScore: number | null;
-  atsBefore: number | null;
-  atsAfter: number | null;
-  resumeSessionId: string | null;
-  resumeVersionId: string | null;
-  answers: ApplicationAnswer[];
-  mode: 'review' | 'auto' | 'manual';
-  appliedAt: string | null;
-  /** Why it needs attention / failed / was skipped. */
-  note: string;
-  createdAt: string;
-  updatedAt: string;
 }

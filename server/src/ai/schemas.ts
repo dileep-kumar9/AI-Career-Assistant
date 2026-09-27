@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Tiny JSON-Schema builders producing strict schemas (all keys required, no extras). */
-const S = {
+export const S = {
   str: (description?: string) => ({ type: 'string', ...(description ? { description } : {}) }),
   num: (description?: string) => ({ type: 'number', ...(description ? { description } : {}) }),
   bool: () => ({ type: 'boolean' }),

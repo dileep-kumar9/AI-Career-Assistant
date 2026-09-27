@@ -1,8 +1,8 @@
-import type { ResumeData } from '../../../shared/resumeTypes.js';
-import type { JDAnalysis } from '../../../shared/jdAnalyzer.js';
-import type { AtsResult } from '../../../shared/ats.js';
-import { normalizeSections } from '../../../shared/normalize.js';
-import { resolvedSizes, templateStyle } from '../../../shared/templates.js';
+import type { ResumeData } from '../../../../shared/resumeTypes.js';
+import type { JDAnalysis } from '../../../../shared/jdAnalyzer.js';
+import type { AtsResult } from '../../../../shared/ats.js';
+import { normalizeSections } from '../../../../shared/normalize.js';
+import { resolvedSizes, templateStyle } from '../../../../shared/templates.js';
 
 /**
  * Prompt construction. Uploaded resumes, job descriptions and chat history are

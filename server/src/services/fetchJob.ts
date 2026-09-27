@@ -42,7 +42,7 @@ function isPrivateIp(ip: string): boolean {
   return v6 === '::1' || v6 === '::' || v6.startsWith('fc') || v6.startsWith('fd') || v6.startsWith('fe80');
 }
 
-async function assertPublicUrl(raw: string): Promise<URL> {
+export async function assertPublicUrl(raw: string): Promise<URL> {
   let url: URL;
   try {
     url = new URL(raw);
@@ -165,7 +165,7 @@ export function jobPostingFromJsonLd(html: string): { title: string; company: st
 
 const JD_MARKERS = /\b(job description|responsibilit|requirements?|qualifications?|what you('|’)ll do|about the role|role overview|key skills|skills required|must have|experience required|who you are|preferred)\b/i;
 
-function jobFromPageText(html: string): { title: string; text: string } {
+export function jobFromPageText(html: string): { title: string; text: string } {
   const title = decode((html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i) || html.match(/<title[^>]*>([^<]+)/i) || [])[1] || '').trim();
   const lines = htmlToText(html).split('\n');
   const first = lines.findIndex((l) => JD_MARKERS.test(l));

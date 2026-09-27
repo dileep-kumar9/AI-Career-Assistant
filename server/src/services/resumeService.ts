@@ -16,7 +16,7 @@ import type { AppConfig } from '../config.js';
 import type { MessageRow, SessionRow, Store, VersionMeta, VersionRow } from '../db/store.js';
 import type { AIChain } from '../ai/provider.js';
 import { EDIT_SCHEMA, EditOutput, ENTRY_SCHEMA, EntryOutput, GENERATE_SCHEMA, GenerateOutput, JD_SCHEMA, JdOutput, PARSE_SCHEMA, ParseOutput, SEMANTIC_SCHEMA, SemanticOutput, validator } from '../ai/schemas.js';
-import { editPrompt, entryPrompt, generatePrompt, jdPrompt, parsePrompt, semanticPrompt } from '../ai/prompts.js';
+import { editPrompt, entryPrompt, generatePrompt, jdPrompt, parsePrompt, semanticPrompt } from '../ai/prompts/index.js';
 import { HEADLINE_REMOVED, applyEdit, applyGeneration, isMalformed } from './factGuard.js';
 import { localEdit, parseCommand } from './commands.js';
 import { ALLOWED_MIME, detectKind, extractAttachment, extractText, sanitizeText } from './extract.js';

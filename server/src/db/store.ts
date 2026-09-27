@@ -1,7 +1,8 @@
 import type { ResumeData } from '../../../shared/resumeTypes.js';
 import type { JDAnalysis } from '../../../shared/jdAnalyzer.js';
 import type { AtsResult } from '../../../shared/ats.js';
-import type { ChatMessageMeta, JobApplication, JobMeta, ResumeListItem, SessionOrigin, SessionStatus, VersionSource } from '../../../shared/apiTypes.js';
+import type { JobApplication } from '../../../shared/careerTypes.js';
+import type { ChatMessageMeta, JobMeta, ResumeListItem, SessionOrigin, SessionStatus, VersionSource } from '../../../shared/apiTypes.js';
 
 export interface SessionRow {
   id: string;

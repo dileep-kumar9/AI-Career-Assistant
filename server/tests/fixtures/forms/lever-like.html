@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Apply - Cloud Security Engineer (fixture)</title></head>
+<body>
+  <!-- Test fixture shaped like a Lever application page (labels in divs, ✱ markers). Nothing is sent anywhere. -->
+  <form id="application-form" method="GET" action="/thanks">
+    <ul>
+      <li class="application-question">
+        <div class="application-label">Resume/CV<span class="required">✱</span></div>
+        <div class="application-field"><input type="file" name="resume" id="resume-upload-input"></div>
+      </li>
+      <li class="application-question">
+        <div class="application-label">Full name<span class="required">✱</span></div>
+        <div class="application-field"><input type="text" name="name"></div>
+      </li>
+      <li class="application-question">
+        <div class="application-label">Email<span class="required">✱</span></div>
+        <div class="application-field"><input type="email" name="email"></div>
+      </li>
+      <li class="application-question">
+        <div class="application-label">Current company</div>
+        <div class="application-field"><input type="text" name="org"></div>
+      </li>
+      <li class="application-question">
+        <div class="application-label">GitHub URL</div>
+        <div class="application-field"><input type="text" name="urls[GitHub]"></div>
+      </li>
+      <li class="application-question">
+        <div class="application-label">What is your notice period?<span class="required">✱</span></div>
+        <div class="application-field"><input type="text" name="cards[q1]"></div>
+      </li>
+    </ul>
+    <button id="btn-submit" type="submit">Submit application</button>
+  </form>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Security Analyst - Acme (fixture)</title></head>
+<body>
+  <!-- Test fixture shaped like a hosted Greenhouse application form. Nothing is sent anywhere. -->
+  <h1>Security Analyst</h1>
+  <form id="application-form" onsubmit="event.preventDefault(); submitIt();">
+    <div class="field"><label for="first_name">First Name <span class="asterisk">*</span></label><input id="first_name" name="first_name" type="text" aria-required="true"></div>
+    <div class="field"><label for="last_name">Last Name *</label><input id="last_name" name="last_name" type="text" required></div>
+    <div class="field"><label for="email">Email *</label><input id="email" name="email" type="email" required></div>
+    <div class="field"><label for="phone">Phone</label><input id="phone" name="phone" type="tel"></div>
+    <div class="field"><label for="resume">Resume/CV *</label><input id="resume" name="resume" type="file" accept=".pdf,.doc,.docx" required style="display:none"><button type="button" onclick="document.getElementById('resume').click()">Attach</button></div>
+    <div class="field"><label for="linkedin">LinkedIn Profile</label><input id="linkedin" name="linkedin" type="url"></div>
+    <div class="field">
+      <label for="auth">Are you legally authorized to work in India? *</label>
+      <select id="auth" name="auth" required><option value="">Select...</option><option>Yes</option><option>No</option></select>
+    </div>
+    <fieldset class="field">
+      <legend>Will you now or in the future require visa sponsorship? *</legend>
+      <label><input type="radio" name="sponsor" value="1" required> Yes</label>
+      <label><input type="radio" name="sponsor" value="0"> No</label>
+    </fieldset>
+    <div class="field"><label for="hear">How did you hear about this job?</label><select id="hear" name="hear"><option value="">Select...</option><option>LinkedIn</option><option>Company Website</option><option>Referral</option></select></div>
+    <div class="field"><label for="gender">Gender</label><select id="gender" name="gender"><option value="">Select...</option><option>Male</option><option>Female</option><option>Decline To Self Identify</option></select></div>
+    <div class="field"><label><input type="checkbox" id="privacy" name="privacy" required> I acknowledge the Privacy Notice *</label></div>
+    <div class="field"><label><input type="checkbox" id="news" name="news"> Send me marketing updates and future job alerts</label></div>
+    <button type="submit">Submit application</button>
+  </form>
+  <div id="done" hidden>Thank you for applying! Your application has been received.</div>
+  <script>
+    function submitIt() {
+      const f = document.getElementById('application-form');
+      const data = {};
+      for (const el of f.elements) {
+        if (!el.name) continue;
+        if (el.type === 'radio') { if (el.checked) data[el.name] = el.value; }
+        else if (el.type === 'checkbox') data[el.name] = el.checked;
+        else if (el.type === 'file') data[el.name] = el.files.length ? el.files[0].name : '';
+        else data[el.name] = el.value;
+      }
+      window.__submitted = data;
+      f.hidden = true;
+      document.getElementById('done').hidden = false;
+    }
+  </script>
+</body>
+</html>

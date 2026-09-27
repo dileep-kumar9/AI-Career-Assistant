@@ -85,7 +85,6 @@ export const ManualEditor: React.FC<{ resume: ResumeData; onSave: (r: ResumeData
       <div className="flex-1 min-h-0 overflow-y-auto">
         <ResumeProvider
           initialData={structuredClone(resume)}
-          persist={false}
           onChange={(d) => {
             if (d !== draft.current) {
               setDirty(JSON.stringify(d) !== JSON.stringify(resume));

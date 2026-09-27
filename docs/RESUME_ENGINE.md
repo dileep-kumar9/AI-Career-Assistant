@@ -1,4 +1,6 @@
-# ATS Resume Builder
+# Resume engine (Resume Builder & ATS analyzer)
+
+> This part of AI Career Assistant is a copy of the resume engine from resume-creator-ai. It is documented here as it works inside this app; setup, deployment and the other features are in the main [README](../README.md). The separate resume-creator-ai project is not modified by this app.
 
 Upload your resume **once**, paste a job description, generate an ATS-friendly tailored resume, and keep refining it through chat until you click **Finish**. The uploaded resume stays the source of truth for the whole session — no edit ever asks you to upload it again.
 
@@ -9,21 +11,6 @@ Upload your resume **once**, paste a job description, generate an ATS-friendly t
 - **Documents:** PDF text extraction (pdf.js), DOCX extraction (mammoth), PDF generation (pdfkit), DOCX generation (docx)
 
 ---
-
-## Quick start (local development)
-
-```bash
-npm install
-cp .env.example .env          # add GEMINI_API_KEY and/or GROQ_API_KEY (free)
-
-# terminal 1 – API server on http://localhost:8787 (SQLite in ./data)
-npm run dev:api
-
-# terminal 2 – web app on http://localhost:8080 (proxies /api to 8787)
-npm run dev
-```
-
-Open http://localhost:8080 and click **Build an ATS resume** (route `/builder`).
 
 ### Choosing an AI provider (free options)
 
@@ -183,95 +170,3 @@ npm run typecheck   # frontend and server TypeScript
 `server/tests/workflow.test.ts` exercises the real Express app against an in-memory SQLite database with a deterministic fake AI provider that deliberately misbehaves (invents a skill, metrics and a new employer) so the guard is tested. Covered: PDF upload, DOCX upload, pasted text, token protection, JD analysis and keyword editing, generation without invented facts, summary edit that leaves other sections untouched, consecutive edits, restore after a server restart (browser refresh), deterministic score recalculation, undo/redo/restore/compare (API and chat commands), template/layout/section changes without content loss, PDF and DOCX export, finish/reopen, AI failure and malformed AI output leaving the resume unchanged, and a check that no edit reply ever asks to upload the resume again. `server/tests/unit.test.ts` covers keyword matching, JD analysis, scoring, the guard, the command router and diffs. Fixtures live in `public/test-fixtures/` and `server/tests/fixtures/`.
 
 ---
-
-## Production deployment
-
-### Vercel + Firebase (recommended, free tiers)
-
-The web app is served by Vercel's CDN, every `/api/*` request runs the same Express app as a serverless function (`api/index.mjs` → `build/server/src/vercel.js`, with every `/api/*` path rewritten to it in `vercel.json`), data is stored in **Cloud Firestore**, and users sign in with **Firebase Authentication** (email/password and Google). Each user's resumes are stored under their account and appear in **My resumes** on any device.
-
-**1. Firebase project** — https://console.firebase.google.com
-
-1. *Add project* (Google Analytics is optional).
-2. **Build → Authentication → Get started → Sign-in method**: enable **Email/Password** and **Google**.
-3. **Authentication → Settings → Authorized domains**: add `resume-creator-ai.vercel.app` (and your custom domain, if any). `localhost` is there already.
-4. **Build → Firestore Database → Create database** (production mode, a region near your users). No rules are needed for the app: only the server (Admin SDK) reads and writes Firestore, and the browser never touches it. Keep the default *deny all* rules:
-   ```
-   rules_version = '2';
-   service cloud.firestore { match /databases/{db}/documents { match /{doc=**} { allow read, write: if false; } } }
-   ```
-5. **Project settings → General → Your apps → Web (</>)**: register a web app and copy `apiKey`, `authDomain`, `projectId`, `appId` (public values → `VITE_FIREBASE_*`).
-6. **Project settings → Service accounts → Generate new private key**: the JSON gives `project_id`, `client_email`, `private_key` (secret → `FIREBASE_*`). Never commit this file.
-
-**2. GitHub → Vercel**
-
-1. Push the repository to GitHub.
-2. https://vercel.com/new → import the repository. Framework preset: *Other* (the build command and output come from `vercel.json`: `npm run build`, output `dist`).
-3. **Settings → Environment Variables** (Production and Preview):
-
-   | Variable | Value |
-   | --- | --- |
-   | `DATABASE_URL` | `firestore` |
-   | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` | from the service-account JSON |
-   | `FIREBASE_PRIVATE_KEY` | the `private_key` value, pasted as is (with its `\n` sequences) |
-   | `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID` | from the web-app config |
-   | `GEMINI_API_KEY` (and optionally `GROQ_API_KEY`, `MISTRAL_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`) | AI providers |
-   | `MAX_UPLOAD_MB` | `4` (Vercel limits request bodies to 4.5 MB) |
-   | `CRON_SECRET` | any long random string (daily clean-up of expired guest sessions) |
-   | `VITE_SITE_URL` | `https://resume-creator-ai.vercel.app` (or your domain) |
-   | `VITE_GOOGLE_SITE_VERIFICATION` | optional, see “Google search” below |
-
-4. Deploy. Every push to `main` redeploys automatically; pull requests get preview URLs.
-
-Notes: the API function has `maxDuration: 60` s (tailoring usually takes 10–40 s). With `FIREBASE_PROJECT_ID` set, sign-in is required (`REQUIRE_AUTH=false` keeps guest mode). Resumes created as a guest in a browser are moved into the account automatically after signing in.
-
-### Google search (“resume-creator-ai”)
-
-- The build writes `robots.txt` and `sitemap.xml` for `VITE_SITE_URL`, and `index.html` carries the title, description, canonical URL, Open Graph tags and `WebSite`/`WebApplication` structured data with the names “Resume Creator AI” and “resume-creator-ai”.
-- Open https://search.google.com/search-console → *Add property* → URL prefix `https://resume-creator-ai.vercel.app/` → *HTML tag* → put the `content` value in `VITE_GOOGLE_SITE_VERIFICATION`, redeploy, click *Verify*.
-- In Search Console: *Sitemaps* → submit `sitemap.xml`; *URL inspection* → request indexing for the home page.
-- New sites usually appear for their exact name within days to a few weeks; ranking for generic terms (“AI resume builder”) depends on links and content and cannot be guaranteed. A custom domain (e.g. `resumecreatorai.com`) and links from your GitHub/LinkedIn/portfolio help.
-
-### Self-hosting (Node server or Docker)
-
-```bash
-npm ci
-npm run build       # builds the web app (dist/) and the server (build/)
-npm start           # serves API + web app on $PORT
-```
-
-- Set `DATABASE_URL=postgres://…` for PostgreSQL or `DATABASE_URL=firestore` for Firestore (migrations run automatically on start, or `npm run db:migrate`). Without it, SQLite is used in `DATA_DIR`.
-- Persist `DATA_DIR` (original uploads; and the SQLite file if used).
-- Behind a proxy/load balancer set `TRUST_PROXY=true` and terminate TLS there.
-- **Docker:** `docker compose up --build` starts the app with PostgreSQL (see `docker-compose.yml`); `Dockerfile` builds a single production image.
-- Horizontal scaling: per-session edits are serialised in-process; with several instances use sticky sessions or a single instance per database.
-
----
-
-## Project structure
-
-```
-shared/            code shared by server and browser
-  resumeTypes.ts   resume model (sections with stable ids, certifications, achievements, layout)
-  normalize.ts     validation/normalisation, plain-text rendering
-  heuristicParser.ts  rule-based resume parser (AI fallback)
-  lexicon.ts, match.ts  skill/certification vocabulary and keyword matching
-  jdAnalyzer.ts    deterministic JD analysis + grounded merge of AI analysis
-  ats.ts           ATS scoring engine
-  diff.ts          version comparison
-  templates.ts     template styles used by preview, PDF and DOCX
-server/src/
-  app.ts, index.ts, config.ts, routes/resumes.ts
-  db/              Store interface, SQLite + PostgreSQL implementations, migrations
-  ai/              provider chain (Anthropic, Groq, Gemini, Mistral), prompts, schemas
-  services/        resumeService (sessions, versions, generate, edit, score, export),
-                   factGuard, commands, extract, export
-server/tests/      vitest suites and fixtures
-src/pages/         BuilderStart, BuilderWorkspace, MyResumes, Index, legacy ResumeMaker
-src/components/builder/  chat, ATS, JD, versions, template/sections, source, manual editor, final review
-src/components/resume/ResumeDocument.tsx  HTML renderer matching the exports
-```
-
-## Legacy editor
-
-The original free-form editor (6 visual templates, browser-side import/export, Resume Agent) is still available at `/resume-maker`, and the Node server continues to serve its `/api/agent`, `/api/parse-resume` and `/api/tailor` endpoints (set `LEGACY_API=false` to disable). Its visual templates are not ATS-safe; use the builder for applications.

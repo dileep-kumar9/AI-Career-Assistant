@@ -1,10 +1,10 @@
-import type { CreateSessionResponse, EditResponse, ReviewData, SessionView, VersionDetail, VersionSummary } from '../../shared/apiTypes';
+import type { CreateSessionResponse, EditResponse, ResumeListItem, ReviewData, SessionView, VersionDetail, VersionSummary } from '../../shared/apiTypes';
 import type { AtsResult } from '../../shared/ats';
 import type { JDAnalysis } from '../../shared/jdAnalyzer';
 import type { ResumeChange } from '../../shared/diff';
 import type { ResumeData } from '../../shared/resumeTypes';
 import { sessionStore } from './sessions';
-import { idToken } from './firebase';
+import { authEnabled, idToken } from './firebase';
 
 export class ApiError extends Error {
   constructor(
@@ -19,7 +19,8 @@ export class ApiError extends Error {
 const BASE = '/api/resumes';
 
 async function call<T>(method: string, path: string, opts: { id?: string; body?: unknown; form?: FormData; raw?: boolean } = {}): Promise<T> {
-  const headers: Record<string, string> = {};
+  // X-ACA-Client: required for writes in single-user local mode (cross-site pages cannot send custom headers).
+  const headers: Record<string, string> = { 'X-ACA-Client': '1' };
   // Signed-in users are identified by their Firebase ID token (works on any device);
   // guests by the session token stored in this browser.
   const user = await idToken().catch(() => null);
@@ -27,7 +28,8 @@ async function call<T>(method: string, path: string, opts: { id?: string; body?:
   if (opts.id) {
     const token = sessionStore.token(opts.id);
     if (token) headers.Authorization = `Bearer ${token}`;
-    else if (!user) throw new ApiError(401, 'This browser does not have access to that resume session. Sign in to open resumes from your account.', 'no_token');
+    // Local single-user mode (no sign-in configured): the server identifies the owner itself.
+    else if (!user && authEnabled) throw new ApiError(401, 'This browser does not have access to that resume session. Sign in to open resumes from your account.', 'no_token');
   }
   let body: BodyInit | undefined;
   if (opts.form) body = opts.form;
@@ -94,7 +96,7 @@ export const api = {
     return URL.createObjectURL(await res.blob());
   },
   /** Resumes in the signed-in account (any device). */
-  listMine: () => call<{ resumes: Array<{ id: string; title: string; status: 'draft' | 'finalized'; updatedAt: string; atsScore: number | null }> }>('GET', ''),
+  listMine: (origin?: 'manual' | 'automation') => call<{ resumes: ResumeListItem[] }>('GET', origin ? `?origin=${origin}` : ''),
   /** Moves a resume created in this browser as a guest into the signed-in account. */
   claim: (id: string) => call<{ id: string; claimed: boolean }>('POST', `/${id}/claim`, { id }),
   setJobDescriptionFromUrl: (id: string, url: string) => call<SessionView>('POST', `/${id}/job-description/url`, { id, body: { url } }).then(track),

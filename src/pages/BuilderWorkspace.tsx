@@ -26,6 +26,7 @@ import { useResumeSession, useSaving, useSessionMutation } from '@/hooks/useResu
 import { ApiError, api } from '@/lib/api';
 import { sessionStore } from '@/lib/sessions';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Tool = 'source' | 'job' | 'sections' | 'ats' | 'versions' | 'template';
 const TOOLS: Array<[Tool, string, React.ComponentType<{ className?: string }>]> = [
@@ -40,7 +41,10 @@ const TOOLS: Array<[Tool, string, React.ComponentType<{ className?: string }>]> 
 export const BuilderWorkspace: React.FC = () => {
   const { sessionId = '' } = useParams();
   const navigate = useNavigate();
-  const hasToken = !!sessionStore.token(sessionId);
+  const { enabled: authEnabled, user } = useAuth();
+  // Account resumes (including automation resumes made on the server) open for their owner on any device;
+  // in single-user local mode the server owns every resume. The server still checks ownership.
+  const hasToken = !!sessionStore.token(sessionId) || !!user || !authEnabled;
   const { data: session, error, isLoading } = useResumeSession(hasToken ? sessionId : undefined);
 
   useEffect(() => {
@@ -257,11 +261,11 @@ const Workspace: React.FC<{ session: SessionView }> = ({ session }) => {
     <div className="flex h-[100dvh] flex-col bg-muted/30">
       {/* Header */}
       <header className="flex items-center gap-2 border-b bg-background px-3 py-2 md:px-4" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
-        <Link to="/" className="flex items-center gap-2 shrink-0" aria-label="Resume Creator AI home">
+        <Link to="/" className="flex items-center gap-2 shrink-0" aria-label="AI Career Assistant home">
           <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
             <Sparkles className="w-4 h-4" />
           </div>
-          <span className="hidden lg:inline font-semibold">Resume Creator AI</span>
+          <span className="hidden lg:inline font-semibold">AI Career Assistant</span>
         </Link>
         <TitleEditor title={session.title} onSave={(t) => rename.mutate(t)} />
         <span className={cn('hidden sm:inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', finalized ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800')}>

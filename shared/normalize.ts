@@ -54,7 +54,7 @@ const str = (v: unknown, max = 5000): string => {
 const strList = (v: unknown, maxItems = 60, maxLen = 1000): string[] =>
   Array.isArray(v) ? v.map((x) => str(x, maxLen).trim()).filter(Boolean).slice(0, maxItems) : [];
 
-const isObj = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /** Splits, trims and de-duplicates skill labels without altering their spelling. */
 export function skillList(values: unknown[]): string[] {
@@ -164,7 +164,7 @@ export function normalizeResume(input: unknown): ResumeData {
   const skills = isObj(input.skills) ? input.skills : Array.isArray(input.skills) ? { mode: 'simple', simple: input.skills } : {};
   const categorized: SkillCategory[] = (Array.isArray(skills.categorized) ? skills.categorized : [])
     .filter(isObj)
-    .map((c: any) => ({ id: str(c.id, 80) || newId('skills'), name: str(c.name, 100) || 'Skills', skills: skillList(strList(c.skills, 80, 100)) }))
+    .map((c: Record<string, unknown>) => ({ id: str(c.id, 80) || newId('skills'), name: str(c.name, 100) || 'Skills', skills: skillList(strList(c.skills, 80, 100)) }))
     .filter((c: SkillCategory) => c.skills.length)
     // Two categories with the same name (e.g. "Additional Skills" twice) become one.
     .reduce((acc: SkillCategory[], c: SkillCategory) => {
@@ -192,7 +192,7 @@ export function normalizeResume(input: unknown): ResumeData {
   ).filter((c) => c.title || c.content).map(retitleGeneric);
 
   base.certifications = (Array.isArray(input.certifications) ? input.certifications : [])
-    .map((c: any): Certification | null => {
+    .map((c: unknown): Certification | null => {
       if (typeof c === 'string') return c.trim() ? { id: newId('cert'), name: str(c, 300), issuer: '', date: '' } : null;
       if (!isObj(c)) return null;
       return { id: str(c.id, 80) || newId('cert'), name: str(c.name, 300), issuer: str(c.issuer, 200), date: str(c.date, 40) };
@@ -200,7 +200,7 @@ export function normalizeResume(input: unknown): ResumeData {
     .filter((c): c is Certification => !!c && !!c.name);
 
   base.achievements = (Array.isArray(input.achievements) ? input.achievements : [])
-    .map((a: any): Achievement | null => {
+    .map((a: unknown): Achievement | null => {
       if (typeof a === 'string') return a.trim() ? { id: newId('ach'), text: str(a, 800) } : null;
       if (!isObj(a)) return null;
       return { id: str(a.id, 80) || newId('ach'), text: str(a.text, 800) };
@@ -209,14 +209,15 @@ export function normalizeResume(input: unknown): ResumeData {
 
   base.sections = normalizeSections(input.sections);
   if (isObj(input.colors)) base.colors = { ...base.colors, ...pickStrings(input.colors, ['primary', 'secondary', 'accent', 'text', 'background']) };
-  base.template = (ATS_TEMPLATE_IDS as string[]).includes(input.template) ? (input.template as AtsTemplateType) : 'professional';
+  base.template = typeof input.template === 'string' && (ATS_TEMPLATE_IDS as string[]).includes(input.template) ? (input.template as AtsTemplateType) : 'professional';
   base.pageFormat = input.pageFormat === 'a4' ? 'a4' : 'letter';
-  base.fontSize = ['small', 'medium', 'large'].includes(input.fontSize) ? input.fontSize : 'medium';
+  const size = input.fontSize;
+  base.fontSize = size === 'small' || size === 'medium' || size === 'large' ? size : 'medium';
   base.fontFamily = str(input.fontFamily, 60) || base.fontFamily;
   const layout = isObj(input.layout) ? input.layout : {};
   const style = normalizeStyle(layout.style);
   base.layout = {
-    margins: ['narrow', 'normal', 'wide'].includes(layout.margins) ? layout.margins : 'normal',
+    margins: layout.margins === 'narrow' || layout.margins === 'normal' || layout.margins === 'wide' ? layout.margins : 'normal',
     pageTarget: layout.pageTarget === 2 ? 2 : 1,
     ...(style ? { style } : {}),
   };
@@ -262,7 +263,7 @@ export function normalizeStyle(input: unknown): StyleOverrides | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
-function pickStrings(obj: Record<string, any>, keys: string[]) {
+function pickStrings(obj: Record<string, unknown>, keys: string[]) {
   const out: Record<string, string> = {};
   for (const k of keys) if (typeof obj[k] === 'string' && /^#[0-9a-f]{3,8}$/i.test(obj[k])) out[k] = obj[k];
   return out;

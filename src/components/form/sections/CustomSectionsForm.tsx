@@ -31,7 +31,7 @@ export const CustomSectionsForm: React.FC = () => {
     updateCustomSections(customSections.filter(section => section.id !== id));
   };
 
-  const updateSection = (id: string, field: keyof CustomSection, value: any) => {
+  const updateSection = (id: string, field: keyof CustomSection, value: CustomSection[keyof CustomSection]) => {
     updateCustomSections(customSections.map(section => 
       section.id === id ? { ...section, [field]: value } : section
     ));

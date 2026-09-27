@@ -35,7 +35,7 @@ export const ExperienceForm: React.FC = () => {
     updateExperience(experience.filter(exp => exp.id !== id));
   };
 
-  const updateExp = (id: string, field: keyof Experience, value: any) => {
+  const updateExp = (id: string, field: keyof Experience, value: Experience[keyof Experience]) => {
     updateExperience(experience.map(exp => 
       exp.id === id ? { ...exp, [field]: value } : exp
     ));

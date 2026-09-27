@@ -1,4 +1,5 @@
-# Production-like stack: app + PostgreSQL.  `docker compose up --build`
+# Resume features + tracker on PostgreSQL (`docker compose up --build`). Requires Firebase sign-in
+# (FIREBASE_* in .env). Job applying needs a local desktop Chrome: run it with `npm run dev:api`.
 services:
   db:
     image: postgres:16
@@ -17,7 +18,7 @@ services:
     environment:
       DATABASE_URL: postgres://ats:ats-change-me@db:5432/ats_resume_builder
       TRUST_PROXY: "true"
-    ports: ["8787:8787"]
+    ports: ["127.0.0.1:8790:8790"]
     volumes: [uploads:/data]
     depends_on:
       db: { condition: service_healthy }

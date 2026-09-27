@@ -31,7 +31,7 @@ export const ProjectsForm: React.FC = () => {
     updateProjects(projects.filter(project => project.id !== id));
   };
 
-  const updateProject = (id: string, field: keyof Project, value: any) => {
+  const updateProject = (id: string, field: keyof Project, value: Project[keyof Project]) => {
     updateProjects(projects.map(project => 
       project.id === id ? { ...project, [field]: value } : project
     ));

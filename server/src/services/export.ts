@@ -26,11 +26,11 @@ export function exportFileBase(r: ResumeData): string {
 
 // The built-in PDF fonts use WinAnsi encoding; map common typographic
 // characters and drop anything that cannot be encoded.
-const PDF_REPLACEMENTS: Record<string, string> = { '→': '->', '←': '<-', '✓': '-', '★': '*', '▪': '•', '◦': '•', '●': '•', '−': '-', ' ': ' ', '≥': '>=', '≤': '<=' };
+const PDF_REPLACEMENTS: Record<string, string> = { '→': '->', '←': '<-', '✓': '-', '★': '*', '▪': '•', '◦': '•', '●': '•', '−': '-', '\u2009': ' ', '≥': '>=', '≤': '<=' };
 function pdfSafe(text: string): string {
   return String(text || '')
-    .replace(/[→←✓★▪◦●− ≥≤]/g, (c) => PDF_REPLACEMENTS[c] ?? '')
-    .replace(/[^\t\n -~ -ÿ–—‘’“”•…€™]/g, '');
+    .replace(/[→←✓★▪◦●−\u2009≥≤]/g, (c) => PDF_REPLACEMENTS[c] ?? '')
+    .replace(/[^\t\n -~\u00A0-ÿ–—‘’“”•…€™]/g, '');
 }
 
 /** One block per rendered section; every custom section (e.g. Strengths) is its own block. */

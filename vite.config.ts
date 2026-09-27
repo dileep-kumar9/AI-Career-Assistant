@@ -4,14 +4,27 @@ import path from "path";
 
 export default defineConfig({
   server: {
-    // Loopback only: the API behind this proxy can drive a browser and submit applications.
-    host: "127.0.0.1",
-    port: 8080,
+    // Loopback only (the API behind this proxy can drive a browser and submit applications).
+    // "localhost" rather than 127.0.0.1: Firebase sign-in authorises localhost by default.
+    host: "localhost",
+    strictPort: true,
+    port: 8081,
     proxy: {
-      "/api": "http://127.0.0.1:8787",
+      "/api": "http://127.0.0.1:8790",
     },
   },
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Long-lived vendor chunks: Firebase Auth and React change rarely.
+        manualChunks: {
+          firebase: ["firebase/app", "firebase/auth"],
+          react: ["react", "react-dom", "react-router-dom", "@tanstack/react-query"],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

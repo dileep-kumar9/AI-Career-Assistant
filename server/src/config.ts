@@ -70,7 +70,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const loopback = ['127.0.0.1', 'localhost', '::1'].includes(host);
   return {
     appName: 'AI Career Assistant',
-    port: Number(env.PORT || 8787),
+    port: Number(env.PORT || 8790),
     host,
     nodeEnv: env.NODE_ENV || 'development',
     // postgres://… uses PostgreSQL; anything else (or empty) uses SQLite.

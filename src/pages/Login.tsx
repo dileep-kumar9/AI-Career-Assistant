@@ -65,7 +65,7 @@ export const Login: React.FC = () => {
           <span className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
             <Sparkles className="w-4 h-4" />
           </span>
-          Resume Creator AI
+          AI Career Assistant
         </Link>
         <div className="ml-auto">
           <ThemeToggle compact />

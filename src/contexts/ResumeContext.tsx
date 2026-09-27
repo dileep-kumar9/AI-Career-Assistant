@@ -166,71 +166,14 @@ interface ResumeContextType {
 
 const ResumeContext = createContext<ResumeContextType | undefined>(undefined);
 
-const loadPersistedState = (): ResumeState => {
-  if (typeof window === 'undefined') return initialState;
-  try {
-    const raw = window.localStorage.getItem('resume-studio-resume-data');
-    if (!raw) return initialState;
-    const parsed = JSON.parse(raw) as ResumeData;
-    if (!parsed || typeof parsed !== 'object' || !parsed.personalInfo || !Array.isArray(parsed.sections)) return initialState;
-    // Never restore the synthetic E2E candidate into the user's real workspace.
-    // Older E2E runs could persist E2E-Test-Resume in localStorage; clear that
-    // stale fixture automatically so normal chat tailoring starts from the
-    // user's actual upload.
-    const name=String(parsed.personalInfo?.fullName||'').toLowerCase();
-    const email=String(parsed.personalInfo?.email||'').toLowerCase();
-    const source=String(parsed.originalTemplate?.sourceFileName||'').toLowerCase();
-    const projects = Array.isArray(parsed.projects) ? parsed.projects : [];
-    const experience = Array.isArray(parsed.experience) ? parsed.experience : [];
-    // Reject the unrelated sample resume that was accidentally bundled with
-    // older builds. Never let that sample become the user's starting artifact.
-    const unrelatedSample = email === 'afifahmad718@gmail.com' ||
-      name.includes('mustahoshin hossain ahamed afif') ||
-      experience.some((x:any) => /systemsage solutions|nestron house/i.test(String(x.company||''))) ||
-      projects.some((x:any) => /systemsage solutions/i.test(String(x.title||'')));
-    const seededDefault = source === 'badham_dileep_kumar_updated_resume.pdf' &&
-      projects.some((p:any) => ['ai-career-assistant','samurai-reimei'].includes(String(p.id||'')));
-    if (seededDefault || unrelatedSample) {
-      window.localStorage.removeItem('resume-studio-resume-data');
-      return initialState;
-    }
-    const company=(parsed.experience||[]).map((x:any)=>String(x.company||'').toLowerCase()).join(' ');
-    const synthetic=email==='e2e@example.com' || name.includes('e2e test') || source.includes('e2e-test-resume') || company.includes('example technologies');
-    if(synthetic){
-      window.localStorage.removeItem('resume-studio-resume-data');
-      return initialState;
-    }
-    // Migrate legacy imported resumes that retained blue styling/Helvetica.
-    // This keeps an already-saved uploaded resume consistent with fresh imports.
-    const migrated = parsed.originalTemplate ? {
-      ...parsed,
-      colors: { ...DEFAULT_COLORS, primary: '#262626', secondary: '#444444', accent: '#262626', text: '#222222', background: '#ffffff' },
-      fontFamily: 'Arial',
-      template: 'original-upload' as const,
-    } : parsed;
-    return { ...initialState, resumeData: migrated };
-  } catch {
-    return initialState;
-  }
-};
-
-/**
- * `initialData` seeds the editor (used by the ATS builder's manual editor);
- * `persist={false}` keeps that editor out of the legacy localStorage slot.
- */
-export const ResumeProvider: React.FC<{ children: ReactNode; initialData?: ResumeData; persist?: boolean; onChange?: (data: ResumeData) => void }> = ({ children, initialData, persist = true, onChange }) => {
-  const [state, dispatch] = useReducer(resumeReducer, initialState, (init) => (initialData ? { ...init, resumeData: initialData } : loadPersistedState()));
+/** Editor state for the Resume Builder manual editor; `initialData` seeds it. Nothing is persisted in the browser. */
+export const ResumeProvider: React.FC<{ children: ReactNode; initialData?: ResumeData; onChange?: (data: ResumeData) => void }> = ({ children, initialData, onChange }) => {
+  const [state, dispatch] = useReducer(resumeReducer, initialState, (init) => (initialData ? { ...init, resumeData: initialData } : init));
 
   useEffect(() => {
     onChange?.(state.resumeData);
-    if (!persist) return;
-    try {
-      window.localStorage.setItem('resume-studio-resume-data', JSON.stringify(state.resumeData));
-    } catch {
-      // Large original PDFs or a browser storage quota should never break editing.
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.resumeData, persist]);
+  }, [state.resumeData]);
 
   const updatePersonalInfo = (data: Partial<ResumeData['personalInfo']>) => {
     dispatch({ type: 'UPDATE_PERSONAL_INFO', payload: data });

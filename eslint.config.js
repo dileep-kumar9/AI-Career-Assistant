@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  { ignores: ["dist", "build", "coverage", "data"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -25,5 +25,17 @@ export default tseslint.config(
       ],
       "@typescript-eslint/no-unused-vars": "off",
     },
+  },
+  {
+    // The server maps raw database rows and untyped third-party JSON (job boards,
+    // AI providers) that are validated at runtime (zod / explicit checks);
+    // `any` stays visible as a warning there instead of failing the build.
+    files: ["server/**/*.ts"],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+    rules: { "@typescript-eslint/no-explicit-any": "warn" },
+  },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: globals.node },
   }
 );

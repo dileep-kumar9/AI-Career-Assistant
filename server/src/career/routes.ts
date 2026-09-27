@@ -75,7 +75,7 @@ export function careerRoutes(m: CareerModules, config: AppConfig): Router {
   r.get('/tracker/export.csv', wrap(async (req, res) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="applications-${new Date().toISOString().slice(0, 10)}.csv"`);
-    res.send(`﻿${await m.tracker.csv(ownerOf(req))}`);
+    res.send(`\uFEFF${await m.tracker.csv(ownerOf(req))}`);
   }));
 
   // ---------------------------------------------------------------- job agent

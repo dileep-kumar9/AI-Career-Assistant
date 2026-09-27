@@ -1,341 +1,133 @@
 # AI Career Assistant
 
-> **Status: design v5, features confirmed. Building has not started (waiting for your go-ahead).**
-> A new, separate app. **resume-creator-ai is not changed.** This app has its own copy of resume-creator-ai's resume features, adds job automation, and adds the most useful features from the earlier *AI Career & Job Application Assistant* plan.
-> GitHub: this app goes into https://github.com/dileep-kumar9/AI-Career-Assistant (see section 14)
+Tailor your resume to every job, apply from a single link or let an agent search and apply for you, then track applications, prepare for interviews and close skill gaps — **using only your real experience**.
 
-```
-                     🤖 AI CAREER ASSISTANT
-                              │
- ┌────────────────────────────┼─────────────────────────────┐
- ▼                            ▼                             ▼
-👤 CAREER PROFILE       📄 RESUME SYSTEM               💼 JOB SYSTEM
-                      Builder · Analyzer          Single Job Apply (link)
-                      Tailoring · Export           Auto Job Agent (search)
-                              │
-                              ▼
-               ⚙️ APPLICATION AUTOMATION (browser)
-                              │
-                              ▼
-               📊 APPLICATION TRACKER (applied → interview → offer)
-                              │
-              ┌───────────────┼────────────────┐
-              ▼               ▼                ▼
-       🎤 INTERVIEW     🧠 SKILL GAP  ──►  📚 LEARNING PLAN
-          PREP              (market-wide, from real JDs)
-              └───────────────┼────────────────┘
-                              ▼
-               💬 CAREER ASSISTANT CHAT (RAG + actions)
-                              │
-       ┌──────────────────────┴───────────────────────┐
-       │ AI LAYER: Prompt Engineering · RAG · LLM      │
-       │           Generative AI · Agentic AI          │
-       │           Guardrails (fact guard, confidence) │
-       └───────────────────────────────────────────────┘
-```
+It runs on your own computer (the job automation drives a real Chrome window with your logins), stores data in your Firebase project (Firestore collections prefixed `aca_`) or a local SQLite file, and works with free AI keys (Gemini / Groq / Mistral, optional Claude) — or with no AI at all, using clearly labelled rule-based fallbacks.
+
+> Design and decisions: [docs/DESIGN.md](docs/DESIGN.md) · Resume engine details: [docs/RESUME_ENGINE.md](docs/RESUME_ENGINE.md)
+> The resume engine is a copy of **resume-creator-ai**; that project is not modified by this app.
 
 ---
 
-## 1. Features from the earlier plan: analysis
+## Features
 
-Each feature was checked against this app's goal (**get hired faster, honestly**) and against what it can reuse.
-
-| Earlier feature | Decision | Why / how it fits |
-|---|---|---|
-| 👤 User Profile | ✅ **Add** as **Career Profile** | One place for skills, target roles, locations and form answers. It feeds the agent's search, the form filler and the chat. Auto-filled from your resume. |
-| 📄 Resume Generator | ✅ Already included | The copied resume-creator-ai builder (tailoring, fact guard, templates, export) |
-| 🔍 Resume Analyzer | ✅ Already included (from resume-creator-ai) | The copied engine already has it: the ATS panel (score, keyword matched/partial/missing with evidence, structure checks), "Raise your score" plan, and chat analysis without a JD ("Analyse my resume", "What are my weaknesses?"). No new page; it's also reachable from job cards and the career chat. |
-| 🔎 Job Discovery | ✅ Already included | Auto Job Agent. **Add Arbeitnow + RemoteOK** (free public APIs the old app used) as extra sources. |
-| 🔗 Job Link Application | ✅ Already included | Single Job Apply |
-| ⚙️ Application Automation | ✅ Already included | Browser appliers + honest question answering |
-| 📊 Application Tracker | ✅ **Upgrade** "Applied jobs" into a real tracker | After you apply the job isn't finished: add stages **Interview → Offer / Rejected / No response**, notes, follow-up reminders, manual entries for jobs applied elsewhere, and a **follow-up / thank-you email draft**. |
-| 🎤 Interview System | ✅ **Add**, linked to each job | When a job reaches *Interview*: likely questions from **that JD + your resume**, a mock interview (typing or voice), AI feedback with score and improved answers. More useful than generic practice. |
-| 🧠 Skill Gap Analysis | ✅ **Add**, market-wide | The agent reads hundreds of real JDs, so the app can say *"Splunk is required in 42% of SOC Analyst jobs you matched, and you don't have it"* and *"learning it would raise 18 jobs above your auto-apply score"*. Unique to this app, and nearly free since the data is already collected. |
-| 📚 Learning Recommendations | ✅ **Add**, tied to gaps | A short study plan per missing skill plus a **proof project**. When you finish and confirm, the skill becomes a **confirmed fact** the resume may use. It closes the loop honestly (gap → learn → proof → resume). |
-| 💬 AI Career Assistant | ✅ **Add** as chat with actions | Ask about **your** data ("Which jobs did I apply to this week?", "Why was the Deloitte job skipped?", "What should I learn next?") and give commands ("apply to this link", "pause the agent"). |
-| 🧠 Prompt Engineering | ✅ **Add** as a central prompt library | All prompts in one folder, versioned, each with a JSON schema and tests. Behaviour can be improved in one place. |
-| 📚 RAG | ✅ **Add** | Grounds the chat, interview prep, question answers and cover letters in *your* resume, profile, JDs and history, so the AI answers from facts, not guesses. |
-| 🤖 LLM | ✅ Already included | Provider chain Gemini → Groq → Mistral → Claude with automatic fallback |
-| ✨ Generative AI | ✅ Already included, extended | Tailoring + cover letters, interview questions and feedback, study plans, email drafts |
-| 🧩 Agentic AI | ✅ Already included, extended | The Auto Job Agent (plan → act → check → retry) + **"Prepare me for this job"** workflow + chat tool-calling, all with human-in-the-loop checkpoints |
-| Own email/password login (old app) | ❌ Not needed | Firebase Auth (Google + email) is already used |
-| LinkedIn/portal scraping ban (old app's rule) | ⚠️ Changed | You chose to include portals. Kept **off by default** for LinkedIn, with warnings and limits (section 6). |
-
-**Not added:** salary prediction and job-market "forecasts". They would be guesswork without reliable data, and would make the app less trustworthy.
-
----
-
-## 2. The parts of the app
-
-| Part | What you do | What happens |
-|---|---|---|
-| **A. Resume Builder + Analyzer** | Upload, edit, analyse | resume-creator-ai features (builder, ATS analyzer, improvement plan, chat) |
-| **B. Single Job Apply** | Paste **one job link** | Read page → find JD → analyse → tailor → show → apply → track |
-| **C. Auto Job Agent** | Choose **a resume and/or skills**, preferences, switch **ON** | Searches jobs → match → JD → tailor → apply → track, until OFF |
-| **D. Application Tracker** | Update stages, add notes | Every job from B, C or manual entry, from *Applied* to *Offer* |
-| **E. Interview Prep** | Click *Prepare* on a job | Questions from that JD + resume, mock interview, feedback |
-| **F. Skills & Learning** | Open the Skills page | Market-wide skill gaps from real JDs, study plans, proof projects |
-| **G. Career Assistant chat** | Ask or command | Answers from your own data (RAG) and runs actions |
-
-B and C share the same pipeline. They differ only in **where the jobs come from**.
-
----
-
-## 3. Career Profile
-
-Filled **automatically from your resume**; you then correct it.
-
-| Group | Fields |
+| Area | What it does |
 |---|---|
-| Basics | Name, email, phone, city, LinkedIn, GitHub, portfolio |
-| Career | Target roles, experience (years), current role/company, notice period, current and expected CTC, job types, locations, remote/hybrid/on-site |
-| Skills | Skills from the resume + skills you add yourself. Each is marked *in resume* or *added by me* (added ones are used for **searching only**, never put on a resume without your confirmation). |
-| Work authorisation | Countries, sponsorship needed, relocation |
-| Saved answers | Answers you gave to application questions, reused next time |
-| Diversity (optional) | Default "Decline to self-identify" |
+| **Resume Builder & ATS analyzer** | Upload (PDF/DOCX) or paste a resume, analyse it with or without a job description (explained 0–100 ATS score, matched/missing keywords with evidence, “raise your score” plan), tailor it, edit by chat, versions, templates, PDF/DOCX export. A fact guard blocks invented skills, employers, dates and metrics. |
+| **Career Profile** | Auto-filled from your resume (AI or rules; never overwrites what you typed). Contact details, target roles, experience, notice period, salary, work authorisation, optional diversity answers, saved answers, skills tagged *resume / added by you / learned*. Used for searching and for answering application forms. |
+| **Single Job Apply** | Paste one job link → read the page (Greenhouse, Lever, Ashby, Workday, LinkedIn public page, JSON-LD / page text, or your logged-in browser for Naukri/Indeed) → analyse the JD → match score → copy your resume as **“Role – Company”** → tailor → PDF → review → apply → tracker. Review mode (you approve) or auto. |
+| **Auto Job Agent** | ON/OFF with a schedule. Searches by your resume, your skills or both: Greenhouse boards, Lever companies, Ashby orgs, Workday sites, Arbeitnow, Remote OK, LinkedIn (public search; Easy Apply), Naukri and Indeed (logged-in browser). Dedupes, filters (companies, title words, job types, experience, date), matches, tailors, and applies in auto mode within daily limits — or leaves jobs “Ready for review”. Run log and queue. |
+| **Application automation** | Playwright + your installed Chrome with its own profile. A generic form filler reads every field’s question and fills it from your profile, saved answers, or AI **only when your resume/profile supports the answer**; uploads the exact tailored PDF; generates a cover letter when asked. It stops at CAPTCHAs, login walls and questions it cannot answer truthfully, leaving the tab open for you. Appliers for Greenhouse, Lever, Ashby, LinkedIn Easy Apply, Naukri (incl. chatbot questions), Indeed Apply, Workday (assisted) and any other form. |
+| **My resumes** | Two lists: **My resumes** (yours) and **Automation resumes** (“Role – Company”, with the application’s status). |
+| **Application Tracker** | Board, table and stats: found → ready → applied → interview → offer / rejected / no response / withdrawn. Notes, interview dates, follow-up reminders (7 days), follow-up / thank-you / withdrawal email drafts (you send them), manual entries, CSV export, response and interview rates by source and by ATS score. |
+| **Interview Prep** | Likely questions for a job from its JD and your resume (technical, resume-based, behavioural, HR), mock answers typed or spoken (browser speech-to-text), per-answer score, strengths, gaps and an improved answer built from your real experience. |
+| **Skills & Learning** | Skill-gap report from every JD the app has read (demand %, whether your resume shows it, and how many jobs it would **measurably** push over your auto-apply score). Learning plans with steps, search-based resources (no invented links) and a proof project. Confirming a finished plan records a fact that tailoring may then use. |
+| **Career Assistant** | Chat over your own records (RAG: profile, resume, applications and JDs, interviews, learning, agent runs) with citations. Proposes actions — apply to a link, start/stop the agent, change a stage, create interview prep or a learning plan, open a resume — that run only after you press **Confirm**. |
+| **AI layer** | Central, versioned prompt library with JSON schemas and zod validation (`server/src/ai/prompts`), provider fallback chain, prompt-injection guardrails, RAG (BM25 + optional Gemini embeddings), agentic workflows with human checkpoints. Settings → AI shows the prompt catalogue. |
 
 ---
 
-## 4. Part B: Single Job Apply (paste a link)
+## Quick start
 
-```
-Paste link ─► [1] Read page ─► [2] Find JD & analyse ─► [3] Match score
-          ─► [4] Tailor resume ("<Role> – <Company>", saved in Automation resumes)
-          ─► [5] Show preview + score before → after + keywords + skill gaps
-          ─► [6] Apply  (review: you approve · auto: submits)
-          ─► [7] Added to the Application Tracker
-```
-
-- Uses your **default resume** (or pick one). Always prepared, even with a low match; you decide.
-- Live steps: "Reading page… Found: SOC Analyst at Deloitte… Tailoring… 64 → 82… Filling form… Submitted ✓".
-- Also offers **"Prepare me for this job"** (section 9.3): JD → match → gaps → likely interview questions → mini study plan.
-
----
-
-## 5. Part C: Auto Job Agent
-
-### 5.1 Setup
-
-| Setting | Example | Used for |
-|---|---|---|
-| **Search by** | ◉ Resume ○ Skills ○ Both | Where the keywords come from (Career Profile) |
-| **Resume** | "Dileep – Resume" | Search keywords (resume mode) and **the resume tailored for every job** |
-| **Skills** | SIEM, Splunk, SOC, Python | Search keywords and the match filter |
-| **Target roles** | SOC Analyst, Security Analyst | Search queries (suggested from the resume) |
-| **Locations / Remote** | Hyderabad, Bangalore, Remote | Filter |
-| **Experience / Job type / Posted within** | 0–2 yrs · Full-time, Internship · 7 days | Filters |
-| **Sources** | Greenhouse ✓ Lever ✓ Ashby ✓ Arbeitnow ✓ RemoteOK ✓ Naukri ✓ Indeed ✓ LinkedIn ☐ | Section 6 |
-| **Exclude** | Companies, title words ("Senior", "Lead") | Filter |
-| **Mode** | Review / Auto | Approve each one, or submit automatically |
-| **Minimum match** | 60 prepare · 75 auto-submit | Quality gate |
-| **Daily limit / Run every** | 25 (LinkedIn 10) · 60 min | Safety / schedule |
-
-> **Applying always needs a resume.** Skills decide which jobs are found; the chosen resume is what gets tailored and submitted. The fact guard never invents experience.
-
-### 5.2 When the agent is ON
-
-```
- ┌──────────── every "Run every" minutes, while ON ─────────────┐
- │ [1] SEARCH   queries from roles + skills + location → sources │
- │ [2] DEDUPE   drop seen / applied / excluded jobs              │
- │ [3] FIND JD  open each job, extract the full JD               │
- │ [4] MATCH    ATS match 0–100 (below minimum → Skipped)        │
- │              every JD also feeds the Skill Gap report         │
- │ [5] TAILOR   "<Role> – <Company>" → Automation resumes        │
- │ [6] APPLY    review → "Ready for review" · auto → submit      │
- │ [7] TRACK    Application Tracker + run log                    │
- └──── stops for the day at the daily limit; OFF stops at once ──┘
-```
-
-**Agent screen:** ON/OFF switch · status ("Searching Naukri… 14 new · 5 matched · 3 applied today") · live log · queue (Found → Matched → Tailored → Ready → Applied / Needs attention / Skipped).
-
----
-
-## 6. Job sources
-
-| Source | Searching | Applying | Notes |
-|---|---|---|---|
-| **Greenhouse / Lever / Ashby** | Public APIs (company boards you add, or found from pasted links) | Fills the form, uploads the tailored PDF | Pauses if a CAPTCHA appears |
-| **Arbeitnow, RemoteOK** | Free public APIs | Through the job's own apply link (routed to the matching applier) | Mostly remote/EU jobs |
-| **Workday** | Public search | **Assisted**: pre-filled, you finish | Separate account per company |
-| **Naukri** | Search in your logged-in Chrome | Apply + chatbot questions | Sends your **profile resume**, not the tailored PDF (left untouched) |
-| **Indeed** | Search in your logged-in Chrome | Indeed Apply | Cloudflare checks often block automation, so it pauses for you |
-| **LinkedIn** | Search in your logged-in Chrome | Easy Apply | ⚠️ Breaks LinkedIn's terms; accounts can be restricted. **Off by default**, max 10 per day |
-| **Pasted link** | — | Matching applier or the generic form filler | Part B |
-
-You log in to Naukri, Indeed and LinkedIn **once**, in the app's own Chrome profile. The app never stores those passwords.
-
----
-
-## 7. Application Tracker (upgraded "Applied jobs")
-
-| Stage | Set by |
-|---|---|
-| Found → Matched → Tailored → Ready | Agent |
-| **Applied** | Agent (or you, for manual/assisted applies) |
-| **Interview** (with date and round) · **Offer** · **Rejected** · **No response** · **Withdrawn** | You, in one click; the chat can also set it ("I got an interview at Deloitte on Friday") |
-
-- **Views:** Kanban board by stage and a table (role, company, source, applied date, stage, match, resume, link); search, filters, CSV export.
-- **Per job:** the tailored resume used (preview), the JD, answers submitted, notes, timeline, and **follow-up reminders** (default: 7 days after applying with no response).
-- **Email drafts:** follow-up and thank-you emails, generated from the job and your resume, for you to copy and send. Nothing is sent automatically.
-- **Manual entry:** add jobs you applied to outside the app, so everything is in one place.
-- **Stats:** applications per week, response rate, interview rate by source and by match score (shows which sources and score ranges actually work).
-
----
-
-## 8. Interview Prep
-
-Opens from any job ("Prepare" button, automatic when the stage becomes *Interview*) or from the menu.
-
-1. **Question set for this job:** technical (from the JD's required skills), resume-based ("Walk me through your SIEM project"), behavioural (STAR) and HR. About 15 questions, ranked by likelihood.
-2. **Mock interview:** one question at a time, answer by **typing or voice** (browser speech-to-text), with an optional timer.
-3. **AI feedback per answer:** score out of 10, what was good, what was missing, and an improved sample answer **built only from your resume facts**.
-4. **Summary:** overall score, weakest topics (linked to Skills & Learning), and history across sessions to track progress.
-
----
-
-## 9. Skills & Learning
-
-### 9.1 Skill gap
-- **Per job:** required/preferred skills matched, missing, or *in resume but weak*.
-- **Market-wide:** from every JD the agent read in the last 30 days for your target roles:
-
-| Skill | In % of matched jobs | You have it? | Jobs that would pass the auto-apply score |
-|---|---:|---|---:|
-| Splunk | 42% | ❌ | +18 |
-| Incident Response | 38% | ✅ (in resume) | — |
-| Azure Sentinel | 21% | ❌ | +7 |
-
-"Jobs that would pass" is **measured**: the app re-scores those JDs with the skill added, using the existing improvement planner.
-
-### 9.2 Learning plan
-For each chosen gap skill: what to learn (ordered topics), estimated hours, free resource *types* (official docs, free courses, a YouTube search link; **no made-up URLs**), and a **proof project** idea.
-When you finish and confirm ("I learned Splunk and built the log-analysis project"), the skill and project become **confirmed facts**. The resume engine may then add them honestly, and the agent re-scores the affected jobs.
-
-### 9.3 "Prepare me for this job" (agentic workflow)
-One click on any job runs: JD analysis → match → gaps → interview questions → mini study plan, and shows one combined report.
-
----
-
-## 10. Career Assistant chat
-
-- **Answers from your own data (RAG):** resume and versions, Career Profile, JDs of matched/applied jobs, tracker notes, interview history, skill-gap report.
-  *"Which jobs did I apply to this week?" · "Why was the Deloitte job skipped?" · "Compare my resume with this JD" · "What should I learn next?"*
-- **Actions (agentic tool-calling):** apply to a pasted link · pause/resume the agent · change a tracker stage · start interview prep · create a learning plan · open a resume.
-  Actions that **submit or change** something always ask *"Confirm?"* first.
-- It cites which document an answer came from ("from your application to Deloitte, 12 Sep"), and says *"I don't have that information"* instead of guessing.
-
----
-
-## 11. AI layer
-
-| Concept | Where it is used |
-|---|---|
-| **Prompt Engineering** | Central `server/src/ai/prompts/` library: resume, JD analysis, matching, question answering, cover letter, interview questions, answer evaluation, skill gap, learning plan, career chat, email drafts. Each prompt has a version, a system role, a JSON output schema, few-shot examples and golden tests (`vitest`). Outputs record which prompt version produced them. |
-| **RAG** | Per-user knowledge base (`aca_kb_chunks`): resume, profile, JDs, notes, interview history, chunked with source links. Retrieval is hybrid: keyword BM25 (always, no cost) plus Gemini embeddings (when a key is set) → top chunks passed to the prompt with citations. Used by chat, interview prep, cover letters and application answers. |
-| **LLM** | Gemini → Groq → Mistral → Claude (`claude-opus-5`), with automatic fallback on errors and rate limits. Cheap models for simple tasks, stronger ones for tailoring and evaluation. |
-| **Generative AI** | Tailored resumes, cover letters, answers to form questions, interview questions and feedback, study plans, email drafts |
-| **Agentic AI** | Auto Job Agent (search → decide → act → verify → retry/pause), "Prepare me for this job" workflow, chat tool-calling. Human-in-the-loop checkpoints: review mode, confirmations, *Needs attention*. |
-| **Guardrails** | Fact guard (no invented skills/metrics/employers), confidence gating for form answers, schema validation of every AI output, prompt-injection filter on job pages (JD text is treated as data, never as instructions), daily limits and dry run |
-
----
-
-## 12. Data: same Firebase project, separate collections
-
-One login works in both apps. This app's collections use the `aca_` prefix so resume-creator-ai's My resumes never shows this app's resumes.
-
-| Collection | Holds |
-|---|---|
-| `aca_resume_sessions` / `_versions` / `aca_chat_messages` / `aca_resume_files` | Resumes (resume-creator-ai format) + `origin` (manual/automation) + `job` (title, company, url, applicationId) |
-| `aca_profiles` | Career Profile + saved answers |
-| `aca_job_applications` | Role, company, location, links, source, **stage + timeline**, match, ATS before/after, resume id/version, answers, notes, reminders |
-| `aca_agent_settings` / `aca_agent_runs` | Agent setup · each run's counts, errors, log |
-| `aca_jobs_seen` | Every JD the agent read (for dedupe + skill-gap statistics) |
-| `aca_interviews` | Question sets, answers, scores, feedback |
-| `aca_learning` | Gap skills, study plans, progress, confirmed facts |
-| `aca_kb_chunks` | RAG chunks (+ embeddings when available) |
-
-Secrets stay in `.env` and are never pushed to GitHub.
-
----
-
-## 13. Architecture
-
-```
-┌──────────────────── AI Career Assistant (runs on your PC) ────────────────────┐
-│ Web UI  React + Vite + Tailwind + shadcn                 http://localhost:8080 │
-│ API     Node + Express + TypeScript                      http://localhost:8787 │
-│  ├─ resume/       copied resume engine (parse, tailor, fact guard, ATS, export)│
-│  ├─ profile/      Career Profile + auto-fill from resume                       │
-│  ├─ automation/   pipeline · agent · scheduler · sources/* · appliers/* ·      │
-│  │                answers · browser (Playwright + your Chrome)                 │
-│  ├─ tracker/      stages, reminders, stats, email drafts                       │
-│  ├─ interview/    question sets, mock sessions, evaluation                     │
-│  ├─ skills/       gap statistics, learning plans, confirmed facts              │
-│  ├─ assistant/    career chat, tools (actions), workflows                      │
-│  └─ ai/           prompts/ · rag/ · provider chain · guardrails                │
-└──────────────────────────────────┬─────────────────────────────────────────────┘
-                                   ▼
-             Firebase (same project): Auth + Firestore (aca_* collections)
-```
-
-Automation runs on your PC (real browser, your logins, CAPTCHAs). Everything else could also be deployed online later.
-
----
-
-## 14. GitHub: AI-Career-Assistant repo
-
-**Confirmed:** the new app is placed in this same repo. The repo currently holds the **older FastAPI + React version** of this idea. The new app is TypeScript/Node and carries its best features forward (section 1), so it **replaces** that code on `main`.
-
-Plan (each push is confirmed with you first):
-1. Keep the old code on a branch `legacy-fastapi` + tag `v1-fastapi` (never deleted).
-2. Put the new app on `main`.
-3. `.env`, `data/`, the browser profile and uploads are git-ignored.
-4. The local folder is renamed `Desktop\dileep\ai-career-assistant`.
-
----
-
-## 15. Setup (after it is built)
+Requirements: **Node.js 22.13+** (24 recommended) and **Google Chrome** (or Edge: `BROWSER_CHANNEL=msedge`).
 
 ```bash
 npm install
-cp .env.example .env     # same Firebase + AI keys as resume-creator-ai; FIRESTORE_PREFIX=aca_
-npm run dev:api          # API + automation (:8787)
-npm run dev              # web app (:8080)
+cp .env.example .env          # then fill in (see below)
+npm run dev:all               # API on http://127.0.0.1:8790 + web on http://localhost:8081
 ```
 
-1. Sign in (same account as resume-creator-ai), upload your resume, and check the auto-filled **Career Profile**.
-2. **Settings:** *Open browser to log in* for Naukri, Indeed and LinkedIn.
-3. **Single job:** paste a link → Apply. **Agent:** choose the resume/skills → switch **ON**.
+Open **http://localhost:8081** (use `localhost`, not 127.0.0.1 — Firebase sign-in authorises `localhost`).
+
+Two terminals instead of `dev:all`: `npm run dev:api` and `npm run dev`. Production-style: `npm run build && npm start` → http://localhost:8790.
+
+### Configuration (`.env`)
+
+| Setting | Purpose |
+|---|---|
+| `DATABASE_URL=firestore` + `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Store data in Cloud Firestore (same project as resume-creator-ai is fine: this app only uses collections starting with `FIRESTORE_PREFIX`, default `aca_`). With a project set, **sign-in is required**. |
+| `VITE_FIREBASE_*` | Public web config for sign-in (email/password and Google). |
+| *(no Firebase, `DATABASE_URL` empty)* | **Single-user local mode**: SQLite in `DATA_DIR`, no sign-in. Only allowed while listening on 127.0.0.1. |
+| `GEMINI_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `ANTHROPIC_API_KEY`, `AI_PROVIDER_ORDER` | AI providers, tried in order with automatic fallback. None → rule-based fallbacks. |
+| `BROWSER_CHANNEL`, `BROWSER_PROFILE_DIR`, `BROWSER_HEADLESS` | Automation browser (default: your Chrome, visible, profile in `data/browser-profile`). |
+| `AUTOMATION_DRY_RUN=true` | Global safety switch: forms are filled but **never submitted**. |
+| `PORT` (8790), `HOST` (127.0.0.1) | Server address. Keep loopback unless you use Firebase sign-in. |
+
+### First steps in the app
+
+1. **Resume Builder** → upload your resume.
+2. **Career Profile** → *Fill from a resume*, then complete notice period, salary, work authorisation, etc. Only what is here (and in your resume) is ever submitted.
+3. **Settings → Automation browser** → *Open to log in* for Naukri / Indeed / LinkedIn (once; sessions stay in the app’s own Chrome profile).
+4. **Single Job Apply** → paste a link → review the tailored resume → *Approve & apply* (or *Fill form only* to submit yourself).
+5. **Auto Job Agent** → choose resume/skills, roles, locations, sources (e.g. Greenhouse boards `stripe`, Lever `palantir`) → *Run once now* to try it → switch **ON**. Start in **review mode**; turn on **dry run** to watch it fill forms without submitting.
 
 ---
 
-## 16. Build plan
+## How applying works (and when it stops)
 
-| # | Milestone | You can test |
-|---|---|---|
-| M1 | Copy the resume engine, rename to AI Career Assistant, `aca_` collections, My resumes / Automation resumes tabs, central prompt library | Builder works; separate lists |
-| M2 | **Career Profile** (auto-fill from resume) | Profile ready for forms and agent |
-| M3 | **Single Job Apply** up to tailoring + **Application Tracker** (stages, notes, table/Kanban) | Paste link → tailored resume → tracked |
-| M4 | Browser + generic form filler + Greenhouse / Lever / Ashby appliers (dry run first) | Part B applies for real |
-| M5 | **Auto Job Agent:** setup, query builder, ON/OFF scheduler, API sources (+ Arbeitnow, RemoteOK), queue, limits | Agent runs end to end on ATS boards |
-| M6 | Naukri, Indeed, LinkedIn; Workday assisted | Portal jobs |
-| M7 | **Skills & Learning** (per-job + market gaps, measured impact, plans, confirmed facts) + "Prepare me for this job" | Gap report from real JDs |
-| M8 | **Interview Prep** (questions, mock typing/voice, feedback, history) | Practice for a real interview |
-| M9 | **RAG + Career Assistant chat** with actions; follow-up reminders and email drafts | Ask/command from chat |
-| M10 | Dashboard stats, CSV export, tests, GitHub push | Finished v1 |
+1. The applier opens the job’s application page in the automation browser (never a private/internal address — apply links are untrusted).
+2. It lists every field with the question a person would read, then answers in this order: **Career Profile rules → your saved answers → AI** (only with `confident=true` from your resume/profile) → otherwise **unanswered**.
+3. Diversity questions → your saved value or “Decline to self-identify”. Required consent boxes are ticked; marketing/newsletter boxes never are.
+4. Your tailored PDF is uploaded; a cover letter (resume facts only) is generated if a form asks.
+5. It presses Submit only when: you approved it (or auto mode + score ≥ your auto-submit threshold + under the daily limit), dry run is off, and every required question was answered truthfully. “Submitted” is recorded only when the site confirms it.
+6. Otherwise the job becomes **Needs attention** with the reason, and the tab stays open for you to finish; then click **Mark as applied**.
 
 ---
 
-## 17. Decisions
+## Security and honesty controls
 
-**Confirmed**
-- ✅ All features in section 1 (the Resume Analyzer is the one already in the copied resume-creator-ai engine)
-- ✅ App name: **AI Career Assistant**
-- ✅ Same Firebase project as resume-creator-ai, with this app's data in `aca_` collections
-- ✅ GitHub: same repo **dileep-kumar9/AI-Career-Assistant**; old code kept on the `legacy-fastapi` branch, new app on `main`
-- ✅ resume-creator-ai itself is never changed
-- ✅ Defaults: Naukri profile resume untouched · LinkedIn off by default (max 10 per day) · pasted links always prepared · cover letters only when asked · applying uses your chosen resume even when searching by skills
+- **No invented facts**: resume tailoring passes the fact guard; application answers must be supported by your profile/resume; skills you merely *added* are used for search only; learned skills count only after you confirm them.
+- **Prompt injection**: job pages, resumes, retrieved records and form labels are wrapped as untrusted data (control/invisible characters stripped, tags neutralised); injection phrasing on job pages is flagged in the UI; every AI output is schema-validated; assistant actions need the user’s own intent, server-side validation (your application ids, links you typed) and a Confirm click.
+- **Human confirmation** for submitting, auto mode, enabling LinkedIn, and every chat action. Daily limits (overall and LinkedIn), minimum match and auto-submit thresholds, dry run.
+- **Server**: listens on 127.0.0.1 by default; DNS-rebinding (Host) check; CSRF guard (`X-ACA-Client`) in single-user mode; Firebase ID-token verification; every document owner-scoped; zod validation of all request bodies; rate limits (general and AI); helmet CSP; SSRF-safe fetching (public IPs only, size/time caps, redirect checks) for job pages and APIs; CSV export neutralises spreadsheet formulas; secrets only in `.env` (git-ignored); `data/` (DB, PDFs, browser profile) git-ignored.
+- `npm run lint` also fails on hidden/invisible characters in source files.
 
-**Still open (a default is used unless you say otherwise)**
-- Build order: automation first (M1–M6), then Skills, Interview and Chat (M7–M9), as in section 16.
+---
+
+## Limitations (honest status)
+
+- **Portal automation is best-effort.** LinkedIn, Naukri and Indeed change their pages often and use bot checks; selectors were written against their current structure but could not be exercised end-to-end here without your logged-in accounts. When a step fails, the job goes to *Needs attention* with the tab open — it never silently guesses. Greenhouse/Lever/Ashby-style forms and the generic filler are covered by real-browser tests on local fixture pages.
+- **LinkedIn**: automation is against LinkedIn’s User Agreement and can get accounts restricted. It is off by default, capped (10/day by default), and job *search* uses LinkedIn’s public (logged-out) pages so your account is only used for Easy Apply.
+- **Naukri** applies with your Naukri **profile** resume, not the tailored PDF (the app does not change your Naukri profile).
+- **Workday** needs an account per company: the app opens the pre-filled application and you finish it (assisted).
+- **CAPTCHAs** are never solved automatically.
+- The **agent runs only while the app is running** on your computer (schedules resume after a restart if it was ON). Job automation needs a desktop Chrome, so it is not available from the Docker image (which serves the resume features, tracker and assistant with Firebase sign-in).
+- Without AI keys: tailoring only re-orders/re-prioritises existing content, interview feedback and learning plans are rule-based (labelled), and chat answers common questions and commands by rules.
+- Stored Firestore data is per owner; queries use single-field filters and in-memory sorting (fine for personal volumes, not for thousands of users).
+
+---
+
+## Testing
+
+```bash
+npm test            # 97 tests: resume engine, career API, guardrails, sources, RAG, security, real-browser form filling
+npm run typecheck   # web + server
+npm run lint        # eslint + hidden-character check
+npm run build       # production web bundle + compiled server
+npm run smoke:sources  # optional: hits the live public job-board APIs (Greenhouse, Lever, Ashby, Workday, Arbeitnow, Remote OK, LinkedIn public)
+```
+
+The browser tests (`server/tests/automation.browser.test.ts`) drive headless Chrome against local fixture forms shaped like Greenhouse/Lever and are skipped when Chrome is not installed. No test submits anything to a real site.
+
+---
+
+## Project structure
+
+```
+server/src/
+  ai/            provider chain, guard.ts (injection guardrails), prompts/ (central prompt library)
+  career/        profile, applications (pipeline + tracker), agent, tracker, interview, skills, rag, assistant, routes
+    jobs/        public job-board sources, portal (browser) sources, link reader
+    automation/  browser manager, answer engine, generic form filler, site appliers
+  services/      resume engine (copied): tailoring, fact guard, ATS, export, extraction, job page fetch
+  db/            SQLite / PostgreSQL / Firestore stores (+ owner-scoped aca_ documents)
+  middleware/    Firebase auth, local-mode CSRF / Host guard
+shared/          types shared by server and web (resume, ATS, JD analyser, careerTypes)
+src/             React app: pages (Dashboard, SingleApply, Agent, Tracker, Interview, Skills, Assistant, Profile, Settings, builder, MyResumes)
+scripts/         dev.mjs (run API + web), smoke-sources.ts, check-hidden-chars.mjs
+docs/            DESIGN.md (approved design v5), RESUME_ENGINE.md
+```
+
+## Repository history
+
+This repository previously held the FastAPI + React version of this idea. It is preserved on the **`legacy-fastapi`** branch and the **`v1-fastapi`** tag.

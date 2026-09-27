@@ -1,0 +1,34 @@
+Priya Raman
+Linux System Administrator
+priya.raman@example.com | +1 555 010 2233 | Austin, TX
+linkedin.com/in/priya-raman-example
+
+PROFESSIONAL SUMMARY
+Linux system administrator with three years of experience supporting production servers, automating routine tasks with Bash and Python, and resolving escalated tickets. Comfortable with AWS EC2 and S3, monitoring and on-call rotations.
+
+TECHNICAL SKILLS
+Operating Systems: Linux (RHEL, Ubuntu), Windows Server
+Cloud: AWS EC2, S3, IAM
+Scripting: Bash, Python
+Tools: Git, Nagios, Jira
+
+PROFESSIONAL EXPERIENCE
+Systems Administrator | Lone Star Hosting | Austin, TX | Jan 2022 - Present
+• Administered 120 RHEL and Ubuntu servers across two data centers.
+• Automated user provisioning and log rotation with Bash and Python scripts.
+• Responded to Nagios alerts and resolved escalated tickets within SLA.
+• Managed AWS EC2 instances and S3 buckets for customer backups.
+
+IT Support Technician | Hill Country College | Austin, TX | Jun 2020 - Dec 2021
+• Resolved hardware, software and network tickets for 800 staff and students.
+• Documented fixes in the knowledge base and trained new technicians.
+
+PROJECTS
+Home Lab Kubernetes Cluster | Kubernetes, Docker
+Built a three-node Kubernetes cluster in a home lab to learn container orchestration.
+
+EDUCATION
+Bachelor of Science in Information Technology | University of Texas at Austin | 2020
+
+CERTIFICATIONS
+CompTIA Linux+ | CompTIA | 2021

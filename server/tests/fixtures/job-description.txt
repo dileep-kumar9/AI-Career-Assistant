@@ -1,0 +1,27 @@
+Job Title: Cloud Support Engineer
+Company: Northwind Systems
+
+About the role
+We are hiring a Cloud Support Engineer to keep our customer-facing AWS workloads healthy.
+
+Key Responsibilities
+- Troubleshoot application and infrastructure issues on AWS and Linux servers
+- Monitor systems with CloudWatch and respond to incidents
+- Write Python and Bash scripts to automate routine support tasks
+- Document troubleshooting steps and maintain the knowledge base
+- Work with REST APIs and SQL databases to investigate data issues
+
+Requirements
+- 1+ years of experience in technical support or cloud operations
+- Hands-on experience with AWS, Linux and Python
+- Strong troubleshooting skills and working knowledge of SQL
+- Familiarity with REST APIs
+- Bachelor's degree in Computer Science or a related field
+
+Nice to have
+- Docker or Kubernetes experience is a plus
+- AWS Certified Cloud Practitioner preferred
+- Experience with Terraform
+
+Benefits
+- Remote-friendly, learning budget

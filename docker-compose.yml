@@ -1,45 +1,26 @@
+# Production-like stack: app + PostgreSQL.  `docker compose up --build`
 services:
   db:
-    image: postgres:16-alpine
-    restart: unless-stopped
+    image: postgres:16
     environment:
-      POSTGRES_USER: career_user
-      POSTGRES_PASSWORD: career_pass
-      POSTGRES_DB: career_assistant
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+      POSTGRES_USER: ats
+      POSTGRES_PASSWORD: ats-change-me
+      POSTGRES_DB: ats_resume_builder
+    volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U career_user -d career_assistant"]
+      test: ["CMD-SHELL", "pg_isready -U ats"]
       interval: 5s
-      timeout: 5s
-      retries: 5
-
-  backend:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    restart: unless-stopped
-    env_file:
-      - backend/.env
+      retries: 10
+  app:
+    build: .
+    env_file: .env
     environment:
-      DATABASE_URL: postgresql://career_user:career_pass@db:5432/career_assistant
+      DATABASE_URL: postgres://ats:ats-change-me@db:5432/ats_resume_builder
+      TRUST_PROXY: "true"
+    ports: ["8787:8787"]
+    volumes: [uploads:/data]
     depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - ./backend:/app
-      - generated_resumes:/app/generated
-
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-
+      db: { condition: service_healthy }
 volumes:
   pgdata:
-  generated_resumes:
+  uploads:

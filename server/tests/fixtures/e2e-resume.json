@@ -1,0 +1,83 @@
+{
+  "personalInfo": {
+    "fullName": "E2E Test Candidate",
+    "jobTitle": "Technical Support Engineer",
+    "email": "e2e@example.com",
+    "phone": "+91 9000000000",
+    "location": "Hyderabad, India",
+    "website": "https://example.com/portfolio",
+    "linkedin": "https://www.linkedin.com/in/e2e-test-candidate",
+    "github": "https://github.com/example/e2e-test-candidate",
+    "profileImage": "",
+    "birthDate": ""
+  },
+  "summary": "Technical support professional with experience in troubleshooting, Python, SQL, REST APIs and AWS.",
+  "experience": [
+    {
+      "id": "e2e-exp-1",
+      "jobTitle": "AWS Intern",
+      "company": "Example Technologies",
+      "location": "Hyderabad, India",
+      "startDate": "2024",
+      "endDate": "2024",
+      "current": false,
+      "description": "Supported cloud infrastructure and technical troubleshooting.",
+      "bulletPoints": [
+        "Supported AWS infrastructure and investigated application issues.",
+        "Documented troubleshooting steps and recurring technical issues."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "id": "e2e-edu-1",
+      "degree": "B.Tech Computer Science",
+      "institution": "Example Engineering College",
+      "location": "India",
+      "graduationYear": "2025",
+      "gpa": "7.8",
+      "honors": ""
+    }
+  ],
+  "projects": [
+    {
+      "id": "e2e-project-1",
+      "title": "AI Code Review Assistant",
+      "description": "Built a Python application using an AI API to assist with code review.",
+      "technologies": ["Python", "REST API", "GPT API"],
+      "liveUrl": "",
+      "githubUrl": "https://github.com/example/ai-code-review",
+      "startDate": "2025-01",
+      "endDate": "2025-04"
+    },
+    {
+      "id": "e2e-project-2",
+      "title": "Support Dashboard",
+      "description": "Created a dashboard for support and operational data analysis.",
+      "technologies": ["Python", "SQL"],
+      "liveUrl": "",
+      "githubUrl": "",
+      "startDate": "",
+      "endDate": ""
+    }
+  ],
+  "skills": {
+    "mode": "simple",
+    "simple": ["Python", "SQL", "REST APIs", "AWS", "Troubleshooting", "Data Analysis"],
+    "categorized": []
+  },
+  "customSections": [],
+  "sections": [
+    {"id":"summary","title":"Professional Summary","visible":true,"order":1},
+    {"id":"experience","title":"Experience","visible":true,"order":2},
+    {"id":"projects","title":"Projects","visible":true,"order":3},
+    {"id":"education","title":"Education","visible":true,"order":4},
+    {"id":"skills","title":"Skills","visible":true,"order":5},
+    {"id":"custom","title":"Custom Sections","visible":true,"order":6}
+  ],
+  "colors": {"primary":"#3b82f6","secondary":"#6b7280","accent":"#10b981","text":"#1f2937","background":"#ffffff"},
+  "template":"tech-sidebar",
+  "pageFormat":"a4",
+  "fontSize":"medium",
+  "fontFamily":"Inter"
+}

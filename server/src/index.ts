@@ -19,11 +19,13 @@ async function main() {
   const ai = createAIChain(config.ai);
   // dist/ lives at the project root; this file runs from server/src (tsx) or build/server/src (compiled).
   const staticDir = [path.resolve(here, '../../dist'), path.resolve(here, '../../../dist')].find((p) => fs.existsSync(path.join(p, 'index.html')));
-  const { app, service } = await createApp({ config, store, ai, staticDir: process.env.STATIC_DIR || staticDir });
+  const { app, service, career } = await createApp({ config, store, ai, staticDir: process.env.STATIC_DIR || staticDir });
 
   const server = app.listen(config.port, config.host, () => {
     logger.info('server.started', { host: config.host, port: config.port, owner: config.localOwner ? 'single-user local mode' : 'firebase accounts', db: store.kind, ai: ai.names.length ? ai.names : 'none (rule-based fallbacks only)' });
   });
+
+  await career.agent.init();
 
   const runCleanup = () => service.cleanup().catch((e) => logger.warn('cleanup.failed', { error: String(e?.message || e) }));
   runCleanup();
@@ -32,6 +34,8 @@ async function main() {
 
   const shutdown = async () => {
     clearInterval(timer);
+    career.agent.shutdown();
+    await career.browser.close();
     server.close();
     await store.close().catch(() => undefined);
     process.exit(0);

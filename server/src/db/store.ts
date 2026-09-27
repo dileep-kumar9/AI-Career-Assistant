@@ -102,6 +102,8 @@ export interface Store {
   docDelete(collection: DocCollection, id: string): Promise<void>;
   /** The owner's documents, newest updatedAt first. */
   docList<T extends DocBase>(collection: DocCollection, ownerUid: string, limit?: number): Promise<T[]>;
+  /** Every owner's documents in a collection (server start-up only, e.g. agents that were ON). */
+  docListAll<T extends DocBase>(collection: DocCollection, limit?: number): Promise<T[]>;
   close(): Promise<void>;
 }
 

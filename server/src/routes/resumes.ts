@@ -88,7 +88,10 @@ export function resumeRoutes(service: ResumeService, config: AppConfig): Router 
   r.post('/paste', aiLimiter, wrap(async (req, res) => res.status(201).json(await service.createFromPaste(body(Paste, req).text, uidOf(req) ?? null))));
 
   // Signed-in users: their resumes on any device, and moving guest resumes into the account.
-  r.get('/', wrap(async (req, res) => res.json({ resumes: await service.listMine(uidOf(req)) })));
+  r.get('/', wrap(async (req, res) => {
+    const origin = req.query.origin === 'manual' || req.query.origin === 'automation' ? req.query.origin : undefined;
+    res.json({ resumes: await service.listMine(uidOf(req), origin) });
+  }));
   r.post('/:id/claim', wrap(async (req, res) => res.json(await service.claim(req.params.id, sessionToken(req), uidOf(req)))));
 
   r.get('/:id', wrap(async (req, res) => res.json(await service.get(req.params.id, tokenOf(req)))));

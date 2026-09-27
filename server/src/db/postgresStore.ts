@@ -203,6 +203,11 @@ export class PostgresStore implements Store {
     return rows.map((r: any) => r.data as T);
   }
 
+  async docListAll<T extends DocBase>(collection: DocCollection, limit = 5000) {
+    const { rows } = await this.pool.query('SELECT data FROM aca_docs WHERE collection = $1 LIMIT $2', [collection, limit]);
+    return rows.map((r: any) => r.data as T);
+  }
+
   async close() {
     await this.pool.end();
   }

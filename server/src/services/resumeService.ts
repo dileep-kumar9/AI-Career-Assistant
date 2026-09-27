@@ -52,11 +52,11 @@ const OWNED_TTL_MS = 3650 * 86_400_000;
 
 /** "SOC Analyst – Deloitte": how automation resumes are named in My resumes. */
 export function automationTitle(job: Pick<JobMeta, 'title' | 'company'>): string {
-  const clean = (v: string) => v.replace(/s+/g, ' ').trim();
+  const clean = (v: string) => v.replace(/\s+/g, ' ').trim();
   return [clean(job.title), clean(job.company)].filter(Boolean).join(' – ').slice(0, 120) || 'Automation resume';
 }
 
-export type JobInput = { title?: string; company?: string; url?: string; applicationId?: string | null };
+export type JobInput = { title?: string; company?: string; url?: string; applicationId?: string | null; facts?: string[] };
 
 export class ResumeService {
   private locks = new Map<string, Promise<unknown>>();
@@ -180,7 +180,7 @@ export class ResumeService {
       currentVersionId: null,
       undoStack: [],
       redoStack: [],
-      userFacts: [...base.userFacts],
+      userFacts: [...base.userFacts, ...(input.facts || []).map((f) => f.slice(0, 600))].slice(-200),
       ownerUid,
       origin: 'automation',
       job,

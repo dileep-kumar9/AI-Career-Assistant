@@ -11,7 +11,11 @@ import { ResumeService } from './services/resumeService.js';
 import { resumeRoutes } from './routes/resumes.js';
 import { HttpError } from './errors.js';
 import { firebaseAuth } from './middleware/firebaseAuth.js';
+import { localGuard } from './middleware/localGuard.js';
 import { logger } from './logger.js';
+import { createCareer } from './career/index.js';
+import { careerRoutes } from './career/routes.js';
+import type { BrowserManager } from './career/automation/browser.js';
 
 export interface AppDeps {
   config: AppConfig;
@@ -21,14 +25,19 @@ export interface AppDeps {
   staticDir?: string;
   /** Test hook: replaces Firebase ID-token verification. */
   verifyIdToken?: (token: string) => Promise<{ uid: string }>;
+  /** Test hook: a headless / fixture browser for the automation. */
+  browser?: BrowserManager;
 }
 
 export async function createApp(deps: AppDeps) {
   const { config, store, ai } = deps;
   const service = new ResumeService(store, ai, config);
+  const career = createCareer({ config, store, ai, resumes: service }, deps.browser);
   const app = express();
   app.disable('x-powered-by');
   if (config.trustProxy) app.set('trust proxy', 1);
+  const loopback = ['127.0.0.1', 'localhost', '::1'].includes(config.host);
+  app.use(localGuard({ loopback, ambientAuthority: !!config.localOwner && !config.firebase.projectId && !deps.verifyIdToken }));
 
   app.use(
     helmet({
@@ -68,8 +77,12 @@ export async function createApp(deps: AppDeps) {
 
   app.use(express.json({ limit: '1mb' }));
   app.get('/api/health', (_req, res) => res.json({ ok: true, db: store.kind, ai: ai.names }));
-  app.get('/api/config', (_req, res) => res.json({ requireAuth: config.requireAuth, authEnabled: !!config.firebase.projectId || !!deps.verifyIdToken }));
-  app.use('/api/resumes', firebaseAuth(config, deps.verifyIdToken), resumeRoutes(service, config));
+  app.get('/api/config', (_req, res) =>
+    res.json({ appName: config.appName, requireAuth: config.requireAuth, authEnabled: !!config.firebase.projectId || !!deps.verifyIdToken, localMode: !!config.localOwner && !config.firebase.projectId && !deps.verifyIdToken, ai: { available: ai.available, providers: ai.names } }),
+  );
+  const auth = firebaseAuth(config, deps.verifyIdToken);
+  app.use('/api/resumes', auth, resumeRoutes(service, config));
+  app.use('/api', auth, careerRoutes(career, config));
   // Scheduled cleanup of expired guest sessions (Vercel Cron sends Authorization: Bearer <CRON_SECRET>).
   app.get('/api/cron/cleanup', (req, res, next) => {
     if (!process.env.CRON_SECRET || req.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) return res.status(401).json({ error: 'Unauthorized' });
@@ -94,5 +107,5 @@ export async function createApp(deps: AppDeps) {
     res.status(500).json({ error: 'Something went wrong on the server. Your resume was not changed.', code: 'internal' });
   });
 
-  return { app, service };
+  return { app, service, career };
 }

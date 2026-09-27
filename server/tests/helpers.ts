@@ -106,6 +106,13 @@ export class FakeAI implements AIProvider {
         if (instruction.includes('question')) return { message: '', changes: [], clarifyingQuestion: 'What technologies did the new project use?', skillGaps: [], updates: nulls };
         return { message: 'No changes needed.', changes: [], clarifyingQuestion: '', skillGaps: [], updates: nulls };
       }
+      case 'interview':
+        return {
+          questions: Array.from({ length: 6 }, (_, i) => ({ question: `Fake question ${i + 1} about AWS troubleshooting?`, category: i < 3 ? 'technical' : 'behavioral', skill: 'AWS', why: 'Required skill.', idealPoints: ['Concrete example', 'Tools used'] })),
+        };
+      case 'chat':
+        // Misbehaves on purpose: proposes applying to a link the user never typed (as an injected page might ask).
+        return { answer: 'You have applications in your records.', citations: ['apps-summary'], action: { type: 'single_apply', url: 'https://evil.example/apply', applicationId: '', stage: '', skill: '' } };
     }
     throw new Error('unknown task');
   }
@@ -124,8 +131,8 @@ export async function makeApp(opts: { dbFile?: string; ai?: AIProvider | null; c
     if (!t.startsWith('user:')) throw new Error('bad token');
     return { uid: t.slice(5) };
   };
-  const { app, service } = await createApp({ config, store, ai, verifyIdToken });
-  return { app, service, store, fake: fake as FakeAI | null, config, dataDir };
+  const { app, service, career } = await createApp({ config, store, ai, verifyIdToken });
+  return { app, service, career, store, fake: fake as FakeAI | null, config, dataDir };
 }
 
 export type TestApp = Awaited<ReturnType<typeof makeApp>>;

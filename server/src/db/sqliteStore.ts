@@ -201,6 +201,11 @@ export class SqliteStore implements Store {
     return rows.map((r) => parse<T | null>(r.data, null)).filter((r): r is T => !!r);
   }
 
+  async docListAll<T extends DocBase>(collection: DocCollection, limit = 5000) {
+    const rows = this.db.prepare('SELECT data FROM aca_docs WHERE collection = ? LIMIT ?').all(collection, limit) as any[];
+    return rows.map((r) => parse<T | null>(r.data, null)).filter((r): r is T => !!r);
+  }
+
   async close() {
     this.db.close();
   }

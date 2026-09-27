@@ -195,6 +195,11 @@ export class FirestoreStore implements Store {
       .slice(0, limit);
   }
 
+  async docListAll<T extends DocBase>(collection: DocCollection, limit = 5000) {
+    const snap = await this.docs(collection).limit(limit).get();
+    return snap.docs.map((d) => d.data() as T);
+  }
+
   async close() {
     // Connections are managed by the SDK.
   }

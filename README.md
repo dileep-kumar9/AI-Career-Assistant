@@ -39,7 +39,7 @@ npm run dev:all               # API on http://127.0.0.1:8790 + web on http://loc
 
 Open **http://localhost:8081** (use `localhost`, not 127.0.0.1 — Firebase sign-in authorises `localhost`).
 
-Two terminals instead of `dev:all`: `npm run dev:api` and `npm run dev`. Production-style: `npm run build && npm start` → http://localhost:8790.
+`dev:all` runs the API without file watching (a restart would close the automation browser and interrupt the agent). When editing server code, use two terminals instead: `npm run dev:api` (watch mode) and `npm run dev`. Production-style: `npm run build && npm start` → http://localhost:8790.
 
 ### Configuration (`.env`)
 

@@ -19,7 +19,8 @@
     "preview": "vite preview",
     "dev:all": "node scripts/dev.mjs",
     "smoke:sources": "tsx scripts/smoke-sources.ts",
-    "check:hidden": "node scripts/check-hidden-chars.mjs"
+    "check:hidden": "node scripts/check-hidden-chars.mjs",
+    "serve:api": "node --env-file-if-exists=.env --import tsx server/src/index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

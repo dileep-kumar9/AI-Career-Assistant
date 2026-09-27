@@ -8,6 +8,8 @@ export default defineConfig({
     // "localhost" rather than 127.0.0.1: Firebase sign-in authorises localhost by default.
     host: "localhost",
     strictPort: true,
+    // Never watch local data: the automation browser profile holds files Chrome keeps locked (EBUSY).
+    watch: { ignored: ["**/data/**", "**/build/**", "**/coverage/**"] },
     port: 8081,
     proxy: {
       "/api": "http://127.0.0.1:8790",

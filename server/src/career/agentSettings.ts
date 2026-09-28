@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AgentSettings } from '../../../shared/careerTypes.js';
+import type { ExperienceRange } from '../../../shared/experience.js';
 import type { DocBase, Store } from '../db/store.js';
 import { now } from './context.js';
 
@@ -16,6 +17,7 @@ export function defaultAgentSettings(): AgentSettings {
     targetRoles: [],
     locations: [],
     remoteOk: true,
+    experienceMin: null,
     experienceMax: null,
     jobTypes: ['full-time'],
     postedWithinDays: 7,
@@ -34,8 +36,10 @@ export function defaultAgentSettings(): AgentSettings {
     excludeCompanies: [],
     excludeTitleWords: ['senior', 'sr.', 'lead', 'principal', 'director', 'manager'],
     mode: 'review',
-    minMatch: 60,
-    autoSubmitMin: 75,
+    minMatch: 50,
+    autoSubmitMin: 70,
+    autoApprove: true,
+    reviewAnswers: true,
     dailyLimit: 25,
     linkedinDailyLimit: 10,
     runEveryMinutes: 60,
@@ -57,6 +61,7 @@ export const AgentSettingsInput = z
     targetRoles: list(10),
     locations: list(15),
     remoteOk: z.boolean(),
+    experienceMin: z.number().int().min(0).max(40).nullable(),
     experienceMax: z.number().int().min(0).max(40).nullable(),
     jobTypes: z.array(z.enum(['full-time', 'part-time', 'contract', 'internship'])).max(4),
     postedWithinDays: z.number().int().min(0).max(60),
@@ -78,6 +83,8 @@ export const AgentSettingsInput = z
     mode: z.enum(['review', 'auto']),
     minMatch: z.number().int().min(0).max(100),
     autoSubmitMin: z.number().int().min(0).max(100),
+    autoApprove: z.boolean(),
+    reviewAnswers: z.boolean(),
     dailyLimit: z.number().int().min(1).max(100),
     linkedinDailyLimit: z.number().int().min(0).max(25),
     runEveryMinutes: z.number().int().min(15).max(24 * 60),
@@ -105,5 +112,30 @@ export function mergeAgentSettings(current: AgentSettings, input: AgentSettingsI
   const next: AgentSettings = { ...current, ...input, sources: { ...current.sources } } as AgentSettings;
   for (const [k, v] of Object.entries(input.sources || {})) (next.sources as any)[k] = { ...(current.sources as any)[k], ...v };
   if (next.autoSubmitMin < next.minMatch) next.autoSubmitMin = next.minMatch;
+  if (next.experienceMin !== null && next.experienceMax !== null && next.experienceMin > next.experienceMax) [next.experienceMin, next.experienceMax] = [next.experienceMax, next.experienceMin];
+  if (next.experienceMax === null) next.experienceMin = null;
   return next;
+}
+
+/** The experience range to search with: the agent setting, else derived from the Career Profile. */
+export function effectiveRange(s: AgentSettings, profileYears: number | null): ExperienceRange | null {
+  if (s.experienceMax !== null) return { min: s.experienceMin ?? 0, max: s.experienceMax };
+  if (profileYears === null) return null;
+  const y = Math.floor(profileYears);
+  return y <= 0 ? { min: 0, max: 0 } : { min: Math.max(0, y - 1), max: y + 1 };
+}
+
+/**
+ * What to do with a tailored job:
+ *  skip   — match or tailored ATS below minMatch (default 50)
+ *  apply  — auto mode, or both scores >= autoSubmitMin (default 70) with auto-approve on
+ *  review — everything else waits for your approval
+ */
+export function decide(s: Pick<AgentSettings, 'minMatch' | 'autoSubmitMin' | 'autoApprove' | 'mode'>, match: number | null, ats: number | null, forceMode?: 'review' | 'auto'): 'skip' | 'apply' | 'review' {
+  const m = match ?? 0;
+  const a = ats ?? m;
+  if (m < s.minMatch || a < s.minMatch) return 'skip';
+  if ((forceMode ?? s.mode) === 'auto') return 'apply';
+  if (s.autoApprove && m >= s.autoSubmitMin && a >= s.autoSubmitMin) return 'apply';
+  return 'review';
 }

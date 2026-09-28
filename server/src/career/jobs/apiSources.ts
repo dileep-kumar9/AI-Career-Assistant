@@ -1,6 +1,7 @@
 import { htmlToText } from '../../services/fetchJob.js';
 import { sanitizeText } from '../../services/extract.js';
 import { fetchJson, safeFetch } from '../net.js';
+import { linkedinLevels } from '../../../../shared/experience.js';
 import { type JobPosting, type JobSource, type SearchQuery, looksRemote, matchesKeywords, matchesLocation, withinDays } from './types.js';
 
 /**
@@ -337,11 +338,12 @@ export const linkedin: JobSource = {
   async search(q, _cfg, signal) {
     const out: JobPosting[] = [];
     const tpr = q.postedWithinDays ? `&f_TPR=r${q.postedWithinDays * 86400}` : '';
+    const levels = linkedinLevels(q.experience ?? null);
     const locs = q.locations.length ? q.locations.slice(0, 2) : [''];
     for (const kw of q.keywords.slice(0, 3)) {
       for (const loc of locs) {
         if (signal.stopped()) return out;
-        const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(kw)}&location=${encodeURIComponent(loc)}&f_AL=true${tpr}&start=0`;
+        const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(kw)}&location=${encodeURIComponent(loc)}&f_AL=true${tpr}${levels ? `&f_E=${encodeURIComponent(levels)}` : ''}&start=0`;
         const res = await safeFetch(url, {}, { timeoutMs: 20_000 });
         if (res.status === 429) throw new Error('LinkedIn is rate-limiting job searches; try again later.');
         if (res.status < 400) for (const p of parseLinkedInSearch(res.text)) if (!out.some((x) => x.externalId === p.externalId) && matchesLocation(p, q.locations, q.remoteOk)) out.push(p);

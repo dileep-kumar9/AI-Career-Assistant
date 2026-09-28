@@ -15,6 +15,7 @@ interface Card {
   title: string;
   company: string;
   location: string;
+  experience?: string;
 }
 
 // Plain JavaScript run in the page (string so build tools never rewrite it).
@@ -24,7 +25,7 @@ const NAUKRI_CARDS = `(() => {
   for (const a of links) {
     const card = a.closest('.srp-jobtuple-wrapper, article, .jobTuple, .cust-job-tuple, li, div[class*="tuple"]') || a.parentElement;
     const pick = (sel) => { const n = card && card.querySelector(sel); return n ? (n.innerText || n.textContent || '').trim() : ''; };
-    out.push({ href: a.href, title: (a.getAttribute('title') || a.innerText || '').trim(), company: pick('a.comp-name, .comp-name, .subTitle, [class*="comp-name"]'), location: pick('.locWdth, .loc, [class*="location"], .ni-job-tuple-icon-srp-location') });
+    out.push({ href: a.href, title: (a.getAttribute('title') || a.innerText || '').trim(), company: pick('a.comp-name, .comp-name, .subTitle, [class*="comp-name"]'), location: pick('.locWdth, .loc, [class*="location"], .ni-job-tuple-icon-srp-location'), experience: pick('.expwdth, .exp-wrap, [class*="exp-wrap"], .exp, .experience') });
   }
   return out;
 })()`;
@@ -63,13 +64,17 @@ export async function searchNaukri(browser: BrowserManager, q: SearchQuery, stop
   for (const kw of q.keywords.slice(0, 3)) {
     for (const loc of locs.length ? locs : ['']) {
       if (stopped()) return out;
-      const url = `https://www.naukri.com/${kebab(kw)}-jobs${loc ? `-in-${kebab(loc)}` : ''}${q.postedWithinDays ? `?jobAge=${Math.min(q.postedWithinDays, 30)}` : ''}`;
+      const params = new URLSearchParams();
+      if (q.postedWithinDays) params.set('jobAge', String(Math.min(q.postedWithinDays, 30)));
+      // Naukri's experience filter: jobs suitable for this many years.
+      if (q.experience) params.set('experience', String(q.experience.max));
+      const url = `https://www.naukri.com/${kebab(kw)}-jobs${loc ? `-in-${kebab(loc)}` : ''}${params.size ? `?${params}` : ''}`;
       const { cards, blocked } = await readCards(browser, url, NAUKRI_CARDS);
       if (blocked) throw new Error('Naukri is showing a human-verification check. Open Naukri in the automation browser (Settings) and solve it once.');
       for (const c of cards) {
         const id = c.href.match(/-(\d{6,})(?:\?|$)/)?.[1] || c.href;
         if (out.some((x) => x.externalId === id)) continue;
-        const p: JobPosting = { source: 'naukri', externalId: id, title: c.title, company: c.company, location: c.location, remote: looksRemote(c.location, c.title), description: '', jobUrl: c.href.split('?')[0], applyUrl: c.href.split('?')[0], postedAt: null, needsBrowser: true };
+        const p: JobPosting = { source: 'naukri', externalId: id, title: c.title, company: c.company, location: c.location, remote: looksRemote(c.location, c.title), description: '', jobUrl: c.href.split('?')[0], applyUrl: c.href.split('?')[0], postedAt: null, needsBrowser: true, experienceText: c.experience || undefined };
         if (matchesLocation(p, q.locations, q.remoteOk)) out.push(p);
       }
     }

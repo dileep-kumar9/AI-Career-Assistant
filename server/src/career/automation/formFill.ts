@@ -42,6 +42,9 @@ const SCAN = String.raw`(root) => {
     const fs = el.closest('fieldset'); if (fs) { const lg = fs.querySelector('legend'); if (lg && txt(lg)) return txt(lg); }
     const g = el.closest('[role=radiogroup],[role=group]');
     if (g) { const lb = g.getAttribute('aria-labelledby'); if (lb) { const t = byIds(lb); if (t) return t; } if (g.getAttribute('aria-label')) return g.getAttribute('aria-label'); }
+    // Google Forms (role=listitem + role=heading) and Microsoft Forms (questionItem + questionTitle).
+    const item = el.closest('[role=listitem], [data-automation-id=questionItem]');
+    if (item) { const h = item.querySelector('[role=heading], [data-automation-id=questionTitle]'); if (h && !h.contains(el)) { const c = h.cloneNode(true); c.querySelectorAll('[aria-label*="Required" i], [data-automation-id=requiredStar]').forEach((x) => x.remove()); if (txt(c)) return txt(c); } }
     let n = el.parentElement;
     for (let i = 0; i < 7 && n && n !== document.body; i++, n = n.parentElement) {
       const cands = n.querySelectorAll(':scope > label, :scope > legend, :scope > [class*=label], :scope > [class*=Label], :scope > [class*=question], :scope > [class*=title], :scope > h2, :scope > h3, :scope > h4, :scope > p, :scope > span, :scope > div > label');
@@ -49,8 +52,12 @@ const SCAN = String.raw`(root) => {
     }
     return '';
   };
-  const reqOf = (el, label) => !!(el.required || el.getAttribute('aria-required') === 'true' || /[*✱]\s*$/.test(label) || /\(required\)/i.test(label));
+  const requiredMark = (el) => { const item = el.closest('[role=listitem], [data-automation-id=questionItem]'); return !!(item && item.querySelector('[aria-label="Required question"], [aria-label*="Required" i], [data-automation-id=requiredStar]')); };
+  const reqOf = (el, label) => !!(el.required || el.getAttribute('aria-required') === 'true' || /[*✱]\s*$/.test(label) || /\(required\)/i.test(label) || requiredMark(el));
   const out = [];
+  // Keys are unique per scan: multi-page forms keep earlier (hidden) pages in the DOM.
+  window.__acaScan = (window.__acaScan || 0) + 1;
+  const prefix = 's' + window.__acaScan + 'f';
   let n = 0;
   const mark = (el, key, opt) => { el.setAttribute('data-aca-key', key); if (opt !== undefined) el.setAttribute('data-aca-opt', String(opt)); };
   const groups = new Map();
@@ -62,7 +69,7 @@ const SCAN = String.raw`(root) => {
     if (!shown(el)) continue;
     if (type === 'radio' || (type === 'checkbox' && el.name && scope.querySelectorAll('input[type=checkbox][name="' + CSS.escape(el.name) + '"]').length > 1)) {
       const gkey = type + ':' + (el.name || questionLabel(el));
-      if (!groups.has(gkey)) { const key = 'f' + (n++); const g = { key, kind: type === 'radio' ? 'radio' : 'checkboxGroup', label: questionLabel(el), name: el.name || '', required: false, options: [], value: '', autocomplete: '', placeholder: '', accept: '', els: [] }; groups.set(gkey, g); out.push(g); }
+      if (!groups.has(gkey)) { const key = prefix + (n++); const g = { key, kind: type === 'radio' ? 'radio' : 'checkboxGroup', label: questionLabel(el), name: el.name || '', required: false, options: [], value: '', autocomplete: '', placeholder: '', accept: '', els: [] }; groups.set(gkey, g); out.push(g); }
       const g = groups.get(gkey);
       const opt = ownLabel(el) || el.value;
       mark(el, g.key, g.options.length);
@@ -71,7 +78,7 @@ const SCAN = String.raw`(root) => {
       if (el.checked) g.value = g.value ? g.value + ', ' + opt : opt;
       continue;
     }
-    const key = 'f' + (n++);
+    const key = prefix + (n++);
     mark(el, key);
     const role = el.getAttribute('role');
     let kind = tag === 'select' ? 'select' : tag === 'textarea' ? 'textarea' : type === 'file' ? 'file' : type === 'checkbox' ? 'checkbox' : ['email', 'tel', 'url', 'number', 'date'].includes(type) ? type : 'text';
@@ -82,7 +89,40 @@ const SCAN = String.raw`(root) => {
     const value = tag === 'select' ? (el.selectedIndex > 0 ? (el.options[el.selectedIndex]?.text || '') : '') : kind === 'checkbox' ? (el.checked ? 'yes' : '') : kind === 'file' ? (el.files && el.files.length ? el.files[0].name : '') : el.value || '';
     out.push({ key, kind, label, name: el.name || el.id || '', required: reqOf(el, label), options, value, autocomplete: el.getAttribute('autocomplete') || '', placeholder: el.getAttribute('placeholder') || '', accept: el.getAttribute('accept') || '' });
   }
-  for (const g of groups.values()) { if (/[*✱]\s*$/.test(g.label) || /\(required\)/i.test(g.label)) g.required = true; delete g.els; }
+  // ARIA widgets that are not real inputs (Google Forms radios / checkboxes / dropdowns).
+  const visible = (el) => { if (el.closest('[aria-hidden="true"]')) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  let gid = 0;
+  const containerIds = new Map();
+  for (const el of scope.querySelectorAll('[role=radio]:not(input), [role=checkbox]:not(input)')) {
+    if (!visible(el)) continue;
+    const isRadio = el.getAttribute('role') === 'radio';
+    const container = el.closest(isRadio ? '[role=radiogroup]' : '[role=list], [role=group]') || el.closest('[role=listitem], [data-automation-id=questionItem]') || el.parentElement;
+    if (!containerIds.has(container)) containerIds.set(container, 'g' + (gid++));
+    const gkey = 'aria:' + (isRadio ? 'r:' : 'c:') + containerIds.get(container);
+    if (!groups.has(gkey)) { const key = prefix + (n++); const g = { key, kind: isRadio ? 'radio' : 'checkboxGroup', label: questionLabel(el), name: '', required: requiredMark(el), options: [], value: '', autocomplete: '', placeholder: '', accept: '', els: [] }; groups.set(gkey, g); out.push(g); }
+    const g = groups.get(gkey);
+    const opt = (el.getAttribute('aria-label') || el.getAttribute('data-value') || el.getAttribute('data-answer-value') || txt(el)).trim();
+    mark(el, g.key, g.options.length);
+    g.options.push(opt);
+    if (el.getAttribute('aria-checked') === 'true') g.value = g.value ? g.value + ', ' + opt : opt;
+  }
+  for (const el of scope.querySelectorAll('[role=listbox]')) {
+    if (!visible(el) || el.closest('select')) continue;
+    const opts = [...el.querySelectorAll('[role=option]')].map((o) => (o.getAttribute('data-value') ?? txt(o)).trim()).filter((t) => t && !/^(choose|select)\b/i.test(t));
+    if (!opts.length) continue;
+    const key = prefix + (n++);
+    mark(el, key);
+    const sel = el.querySelector('[role=option][aria-selected=true]');
+    const value = sel ? (sel.getAttribute('data-value') ?? txt(sel)).trim() : '';
+    const label = questionLabel(el);
+    out.push({ key, kind: 'listbox', label, name: '', required: reqOf(el, label), options: [...new Set(opts)], value: /^(choose|select)\b/i.test(value) ? '' : value, autocomplete: '', placeholder: '', accept: '' });
+  }
+  for (const g of groups.values()) {
+    if (/[*✱]\s*$/.test(g.label) || /\(required\)/i.test(g.label)) g.required = true;
+    // A single custom checkbox is a yes/no question.
+    if (g.kind === 'checkboxGroup' && g.options.length === 1) { g.kind = 'checkbox'; g.label = (g.label + ' ' + g.options[0]).trim(); g.value = g.value ? 'yes' : ''; }
+    delete g.els;
+  }
   return out.map((f) => ({ ...f, label: f.label.replace(/\s*[*✱]\s*$/, '').replace(/\s*\(required\)\s*/i, ' ').trim().slice(0, 600) }));
 }`;
 
@@ -93,6 +133,7 @@ export async function scanFields(frame: Frame | Page, root: string | null = null
 export interface FilledField {
   label: string;
   kind: FieldInfo['kind'];
+  options: string[];
   required: boolean;
   value: string;
   source: ApplicationAnswer['source'] | 'prefilled';
@@ -110,6 +151,13 @@ export interface FillReport {
 export interface FillFiles {
   resume: string;
   cover: () => Promise<string | null>;
+}
+
+/** Ticks a real checkbox, or clicks an ARIA checkbox (div role=checkbox) that is not checked yet. */
+async function tick(loc: ReturnType<Page['locator']>) {
+  const isInput = await loc.evaluate((el) => el.tagName === 'INPUT').catch(() => false);
+  if (isInput) return loc.check({ force: true, timeout: 8000 });
+  if ((await loc.getAttribute('aria-checked').catch(() => null)) !== 'true') await loc.click({ timeout: 8000 });
 }
 
 const sel = (key: string, opt?: number) => `[data-aca-key="${key}"]${opt === undefined ? '' : `[data-aca-opt="${opt}"]`}`;
@@ -135,7 +183,7 @@ async function pickComboboxOption(frame: Frame | Page, key: string, value: strin
 export async function fillFields(frame: Frame | Page, fields: FieldInfo[], engine: AnswerEngine, files: FillFiles): Promise<FillReport> {
   const report: FillReport = { fields: [], missingRequired: [] };
   for (const f of fields) {
-    const entry: FilledField = { label: f.label || f.name || '(unlabelled field)', kind: f.kind, required: f.required, value: '', source: 'rule', confident: false, filled: false };
+    const entry: FilledField = { label: f.label || f.name || '(unlabelled field)', kind: f.kind, options: f.options, required: f.required, value: '', source: 'rule', confident: false, filled: false };
     const prefilled = f.value && f.kind !== 'file' && f.kind !== 'checkbox' && !/^(select|choose)/i.test(f.value);
     if (prefilled) {
       report.fields.push({ ...entry, value: f.value, source: 'prefilled', confident: true, filled: true });
@@ -172,17 +220,26 @@ export async function fillFields(frame: Frame | Page, fields: FieldInfo[], engin
           break;
         }
         case 'checkbox':
-          if (a.value === 'yes') await loc.check({ force: true, timeout: 8000 });
+          if (a.value === 'yes') await tick(loc);
           break;
         case 'checkboxGroup':
           for (const v of a.value.split(/,\s*/)) {
             const idx = f.options.indexOf(v);
-            if (idx >= 0) await frame.locator(sel(f.key, idx)).first().check({ force: true, timeout: 8000 });
+            if (idx >= 0) await tick(frame.locator(sel(f.key, idx)).first());
           }
           break;
         case 'combobox':
           if (!(await pickComboboxOption(frame, f.key, a.value))) throw new Error('No matching option in the list.');
           break;
+        case 'listbox': {
+          // Custom dropdown (e.g. Google Forms): open it, then click the option.
+          await loc.click({ timeout: 8000 });
+          await frame.waitForTimeout(500);
+          const option = frame.locator(`[role="option"][data-value="${a.value.replace(/"/g, '\\"')}"]:visible`).first();
+          if (await option.isVisible().catch(() => false)) await option.click({ timeout: 5000 });
+          else await frame.locator('[role="option"]:visible').filter({ hasText: a.value }).first().click({ timeout: 5000 });
+          break;
+        }
         case 'date':
           if (!/^\d{4}-\d{2}-\d{2}$/.test(a.value)) throw new Error('Date is not in YYYY-MM-DD format.');
           await loc.fill(a.value, { timeout: 8000 });

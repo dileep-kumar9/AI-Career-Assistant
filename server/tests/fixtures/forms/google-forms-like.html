@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Data Analyst Hiring 2026 - Google Forms (fixture)</title>
+<style>.hidden{display:none} [role=radio],[role=checkbox],[role=option],[role=button],[role=listbox]{display:inline-block;padding:4px;margin:2px;border:1px solid #999;cursor:pointer}</style></head>
+<body>
+  <!-- Test fixture shaped like a Google Form (ARIA widgets, not real inputs; two pages). Nothing is sent anywhere. -->
+  <div role="list" id="page1">
+    <div role="listitem">
+      <div role="heading" id="h1">Full name <span aria-label="Required question">*</span></div>
+      <input type="text" aria-labelledby="h1" required>
+    </div>
+    <div role="listitem">
+      <div role="heading" id="h2">Email <span aria-label="Required question">*</span></div>
+      <input type="email" aria-labelledby="h2" required>
+    </div>
+    <div role="listitem">
+      <div role="heading" id="h3">Are you willing to relocate? <span aria-label="Required question">*</span></div>
+      <div role="radiogroup" aria-labelledby="h3">
+        <div role="radio" aria-checked="false" data-value="Yes" aria-label="Yes">Yes</div>
+        <div role="radio" aria-checked="false" data-value="No" aria-label="No">No</div>
+      </div>
+    </div>
+    <div role="listitem">
+      <div role="heading" id="h4">Current city <span aria-label="Required question">*</span></div>
+      <div role="listbox" aria-labelledby="h4" id="city">
+        <div role="option" aria-selected="true" data-value="">Choose</div>
+        <div role="option" aria-selected="false" data-value="Hyderabad" class="hidden">Hyderabad</div>
+        <div role="option" aria-selected="false" data-value="Pune" class="hidden">Pune</div>
+      </div>
+    </div>
+    <div role="button" id="nextBtn"><span>Next</span></div>
+  </div>
+  <div role="list" id="page2" class="hidden">
+    <div role="listitem">
+      <div role="heading" id="h5">LinkedIn profile</div>
+      <input type="text" aria-labelledby="h5">
+    </div>
+    <div role="listitem">
+      <div role="heading" id="h6">I confirm the information above is true <span aria-label="Required question">*</span></div>
+      <div role="checkbox" aria-checked="false" aria-label="I agree" data-answer-value="I agree">I agree</div>
+    </div>
+    <div role="button" id="submitBtn"><span>Submit</span></div>
+  </div>
+  <div id="done" class="hidden">Your response has been recorded.</div>
+  <script>
+    document.querySelectorAll('[role=radio]').forEach((r) => r.addEventListener('click', () => {
+      r.parentElement.querySelectorAll('[role=radio]').forEach((x) => x.setAttribute('aria-checked', 'false'));
+      r.setAttribute('aria-checked', 'true');
+    }));
+    document.querySelectorAll('[role=checkbox]').forEach((c) => c.addEventListener('click', () => c.setAttribute('aria-checked', c.getAttribute('aria-checked') === 'true' ? 'false' : 'true')));
+    const city = document.getElementById('city');
+    city.addEventListener('click', (e) => {
+      const opt = e.target.closest('[role=option]');
+      if (opt && opt.dataset.value) {
+        city.querySelectorAll('[role=option]').forEach((o) => { o.setAttribute('aria-selected', o === opt ? 'true' : 'false'); if (o.dataset.value) o.classList.add('hidden'); });
+        city.querySelector('[role=option]').textContent = opt.dataset.value;
+        return;
+      }
+      city.querySelectorAll('[role=option]').forEach((o) => o.classList.remove('hidden'));
+    });
+    document.getElementById('nextBtn').addEventListener('click', () => {
+      document.getElementById('page1').classList.add('hidden');
+      document.getElementById('page2').classList.remove('hidden');
+    });
+    document.getElementById('submitBtn').addEventListener('click', () => {
+      window.__submitted = {
+        name: document.querySelector('[aria-labelledby=h1]').value,
+        email: document.querySelector('[aria-labelledby=h2]').value,
+        relocate: document.querySelector('[role=radio][aria-checked=true]')?.dataset.value || null,
+        city: document.querySelector('#city [role=option][aria-selected=true]')?.dataset.value || null,
+        linkedin: document.querySelector('[aria-labelledby=h5]').value,
+        agree: document.querySelector('[role=checkbox]').getAttribute('aria-checked'),
+      };
+      document.getElementById('page2').classList.add('hidden');
+      document.getElementById('done').classList.remove('hidden');
+    });
+  </script>
+</body>
+</html>

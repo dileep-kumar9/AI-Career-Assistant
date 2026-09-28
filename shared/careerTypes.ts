@@ -90,6 +90,17 @@ export interface ApplicationAnswer {
   confident: boolean;
 }
 
+/** A form question waiting for you (unanswerable, or an answer from memory/AI to confirm). */
+export interface PendingQuestion {
+  question: string;
+  kind: string;
+  options: string[];
+  required: boolean;
+  /** Pre-filled suggestion (your remembered answer or an AI answer), "" when unknown. */
+  suggested: string;
+  source: ApplicationAnswer['source'] | 'none';
+}
+
 export interface TimelineEntry {
   at: string;
   stage: ApplicationStage;
@@ -134,6 +145,13 @@ export interface JobApplication {
   hasResumePdf: boolean;
   coverLetter: string;
   answers: ApplicationAnswer[];
+  /** answers = the form asked things only you can answer; review = confirm remembered/AI answers before submitting. */
+  waitingFor: 'answers' | 'review' | null;
+  pendingQuestions: PendingQuestion[];
+  /** Answers you gave for this application (used first when the form is filled again). */
+  answerOverrides: Array<{ question: string; answer: string }>;
+  /** Experience the job asks for, e.g. "5-7 years" (empty when not stated). */
+  experienceRequired: string;
   mode: 'review' | 'auto' | 'manual';
   stage: ApplicationStage;
   /** Why it needs attention / failed / was skipped. */
@@ -170,6 +188,8 @@ export interface AgentSettings {
   targetRoles: string[];
   locations: string[];
   remoteOk: boolean;
+  /** Your experience range for job search (null = any). Fresher = 0-0. A job fits when its minimum required years <= experienceMax. */
+  experienceMin: number | null;
   experienceMax: number | null;
   jobTypes: JobType[];
   postedWithinDays: number;
@@ -177,10 +197,13 @@ export interface AgentSettings {
   excludeCompanies: string[];
   excludeTitleWords: string[];
   mode: 'review' | 'auto';
-  /** Prepare (tailor) jobs scoring at least this. */
+  /** Jobs whose match or tailored ATS score is below this are skipped automatically. */
   minMatch: number;
-  /** In auto mode, submit only jobs scoring at least this (after tailoring). */
+  /** Auto-approve and apply when BOTH the match and the tailored ATS score reach this (review mode). */
   autoSubmitMin: number;
+  autoApprove: boolean;
+  /** Pause before submitting so you can check answers that came from memory or AI. */
+  reviewAnswers: boolean;
   dailyLimit: number;
   linkedinDailyLimit: number;
   runEveryMinutes: number;

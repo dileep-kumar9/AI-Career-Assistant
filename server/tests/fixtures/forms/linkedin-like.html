@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Full Stack Developer | Headway Tek (fixture)</title>
+<style>.hidden{display:none} [role=dialog]{border:1px solid #ccc;padding:16px;margin:16px;max-width:640px}</style></head>
+<body>
+  <!-- Test fixture shaped like LinkedIn Easy Apply (4 steps in a dialog). Nothing is sent anywhere. -->
+  <img class="global-nav__me-photo" alt="me" width="10" height="10">
+  <h1>Full Stack Developer</h1>
+  <button class="jobs-apply-button" aria-label="Easy Apply to Full Stack Developer" onclick="openDialog()">Easy Apply</button>
+  <div id="dlg" role="dialog" class="hidden" aria-label="Apply to Headway Tek Inc">
+    <h2>Apply to Headway Tek Inc</h2>
+    <progress id="prog" value="0" max="100"></progress>
+    <!-- step 1: contact info (prefilled) -->
+    <section data-step="1">
+      <label for="em">Email address*</label>
+      <select id="em" required><option>Select an option</option><option selected>asha@example.com</option></select>
+      <label for="cc">Phone country code*</label>
+      <select id="cc" required><option selected>India (+91)</option></select>
+      <label for="ph">Mobile phone number*</label>
+      <input id="ph" type="text" required value="9000000000">
+    </section>
+    <!-- step 2: resume picker with previously uploaded resumes and an upload button -->
+    <section data-step="2" class="hidden">
+      <h3>Resume*</h3>
+      <p>Select or upload a resume in DOC, DOCX, or PDF format that is less than 2MB</p>
+      <ul id="resumes">
+        <li><label><input type="radio" name="resume" value="old1" checked required> old_resume.pdf</label></li>
+        <li><label><input type="radio" name="resume" value="old2"> another_resume.docx</label></li>
+      </ul>
+      <label class="upload">Upload resume <input id="upload" type="file" accept=".pdf,.doc,.docx" style="display:none"></label>
+    </section>
+    <!-- step 3: additional questions -->
+    <section data-step="3" class="hidden">
+      <h3>Additional Questions</h3>
+      <fieldset>
+        <legend>Do you have 7+ years of experience in Python &amp; FastAPI/REST APIs?*</legend>
+        <label><input type="radio" name="q7" value="Yes" required> Yes</label>
+        <label><input type="radio" name="q7" value="No"> No</label>
+      </fieldset>
+      <fieldset>
+        <legend>Can you join immediately to 15 days after selection?*</legend>
+        <label><input type="radio" name="q15" value="Yes" required> Yes</label>
+        <label><input type="radio" name="q15" value="No"> No</label>
+      </fieldset>
+    </section>
+    <!-- step 4: review -->
+    <section data-step="4" class="hidden">
+      <h3>Review your application</h3>
+      <label><input type="checkbox" id="follow-company-checkbox" checked> Follow Headway Tek Inc to stay up to date with their page</label>
+    </section>
+    <div id="err" class="artdeco-inline-feedback--error" role="alert"></div>
+    <button id="next" aria-label="Continue to next step" onclick="next()">Next</button>
+    <button id="submit" aria-label="Submit application" class="hidden" onclick="submitIt()">Submit application</button>
+  </div>
+  <div id="sent" class="hidden">Your application was sent to Headway Tek Inc</div>
+  <script>
+    let step = 1;
+    function openDialog() { document.getElementById('dlg').classList.remove('hidden'); }
+    function show(n) {
+      document.querySelectorAll('[data-step]').forEach((s) => s.classList.toggle('hidden', Number(s.dataset.step) !== n));
+      document.getElementById('prog').value = (n - 1) * 33;
+      document.getElementById('next').classList.toggle('hidden', n === 4);
+      document.getElementById('submit').classList.toggle('hidden', n !== 4);
+      document.getElementById('next').textContent = n === 3 ? 'Review' : 'Next';
+    }
+    document.getElementById('upload').addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const li = document.createElement('li');
+      li.innerHTML = '<label><input type="radio" name="resume" value="new" checked> ' + f.name + '</label>';
+      document.getElementById('resumes').prepend(li);
+      window.__uploaded = f.name;
+    });
+    function next() {
+      const err = document.getElementById('err');
+      err.textContent = '';
+      if (step === 3 && (!document.querySelector('input[name=q7]:checked') || !document.querySelector('input[name=q15]:checked'))) { err.textContent = 'Please make a selection'; return; }
+      step++; show(step);
+    }
+    function submitIt() {
+      window.__submitted = {
+        resume: document.querySelector('input[name=resume]:checked').closest('label').textContent.trim(),
+        q7: document.querySelector('input[name=q7]:checked').value,
+        q15: document.querySelector('input[name=q15]:checked').value,
+        follow: document.getElementById('follow-company-checkbox').checked,
+      };
+      document.getElementById('dlg').classList.add('hidden');
+      document.getElementById('sent').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

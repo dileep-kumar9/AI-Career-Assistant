@@ -8,7 +8,8 @@ import { logger } from '../logger.js';
 import { type CareerContext, hashOf, newId, now } from './context.js';
 import type { ProfileService } from './profile.js';
 import type { ApplicationService } from './applications.js';
-import { type AgentSettingsInput, getAgentSettings, mergeAgentSettings, saveAgentSettings } from './agentSettings.js';
+import { type AgentSettingsInput, decide, effectiveRange, getAgentSettings, mergeAgentSettings, saveAgentSettings } from './agentSettings.js';
+import { describeRange, experienceRequirement, fitsExperience } from '../../../shared/experience.js';
 import { matchResume } from './matching.js';
 import { API_SOURCES, linkedinPosting } from './jobs/apiSources.js';
 import { searchIndeed, searchNaukri } from './jobs/browserSources.js';
@@ -204,8 +205,9 @@ export class AgentService {
         return this.finish(run);
       }
       const base = await this.ctx.resumes.get(resumeId, { uid: owner });
-      const q = buildQuery(settings, profile, base.current);
-      await say(`Searching for ${q.keywords.join(', ') || 'your skills'}${q.locations.length ? ` in ${q.locations.join(', ')}` : ''}${q.remoteOk ? ' (remote OK)' : ''}.`);
+      const range = effectiveRange(settings, profile.career.yearsExperience);
+      const q = { ...buildQuery(settings, profile, base.current), experience: range };
+      await say(`Searching for ${q.keywords.join(', ') || 'your skills'}${q.locations.length ? ` in ${q.locations.join(', ')}` : ''}${q.remoteOk ? ' (remote OK)' : ''} · ${describeRange(range)}.`);
 
       // 1. search
       const found: JobPosting[] = [];
@@ -247,7 +249,8 @@ export class AgentService {
         if (await this.apps.findDuplicate(owner, p, apps)) continue;
         batchKeys.add(k.primary);
         batchKeys.add(k.fuzzy);
-        const why = excludeReason(p, settings);
+        // Portal cards often show the experience ("5-7 Yrs"): skip early when it cannot fit.
+        const why = excludeReason(p, settings) || (p.experienceText && !fitsExperience(experienceRequirement(p.experienceText), range) ? `Needs ${p.experienceText}` : null);
         if (why) {
           run.counts.skipped++;
           await this.remember(owner, p, null, null, null);
@@ -278,9 +281,14 @@ export class AgentService {
           continue;
         }
         const m = matchResume(base.current, posting.description, { weights: this.ctx.config.atsWeights, original: base.original });
-        const years = m.analysis.minYears;
-        const tooSenior = settings.experienceMax !== null && typeof years === 'number' && years > settings.experienceMax + 1;
-        if (m.score < settings.minMatch || tooSenior) {
+        const req = experienceRequirement(`${posting.title}\n${posting.description}`);
+        if (!fitsExperience(req, range)) {
+          run.counts.skipped++;
+          await this.remember(owner, posting, m.score, m.analysis, null);
+          await say(`Skipped (experience): ${posting.title} at ${posting.company} asks ${req!.min}${req!.max ? `-${req!.max}` : '+'} years; you search ${describeRange(range)}.`);
+          continue;
+        }
+        if (m.score < settings.minMatch) {
           run.counts.skipped++;
           await this.remember(owner, posting, m.score, m.analysis, null);
           continue;
@@ -291,12 +299,13 @@ export class AgentService {
         await say(`Match ${m.score}: ${posting.title} at ${posting.company}. Tailoring…`);
         const prepared = await this.apps.prepare(owner, app.id, resumeId);
         if (prepared.stage !== 'ready') {
-          run.counts.needsAttention++;
+          if (prepared.stage === 'skipped') run.counts.skipped++;
+          else run.counts.needsAttention++;
           continue;
         }
         run.counts.prepared++;
         const fresh2 = await this.settings(owner);
-        if (fresh2.mode === 'auto' && (prepared.atsAfter ?? prepared.matchScore ?? 0) >= fresh2.autoSubmitMin && !stopped()) {
+        if (decide(fresh2, prepared.matchScore, prepared.atsAfter) === 'apply' && !stopped()) {
           state.phase = `Applying: ${posting.title} at ${posting.company}…`;
           const done = await this.apps.apply(owner, app.id, { submit: true, trigger: 'agent' });
           if (done.stage === 'applied') {

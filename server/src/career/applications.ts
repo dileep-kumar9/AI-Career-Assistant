@@ -12,7 +12,10 @@ import { injectionSignals } from '../ai/guard.js';
 import { coverLetter as coverPrompt, runPrompt } from '../ai/prompts/index.js';
 import { type CareerContext, hashOf, newId, now } from './context.js';
 import type { ProfileService } from './profile.js';
-import { getAgentSettings } from './agentSettings.js';
+import { decide, getAgentSettings } from './agentSettings.js';
+import { normQuestion } from './profile.js';
+import { experienceRequirement } from '../../../shared/experience.js';
+import type { Page } from 'playwright-core';
 import { matchResume } from './matching.js';
 import { type JobPosting, dedupeKeys } from './jobs/types.js';
 import { readJobLink } from './jobs/readers.js';
@@ -29,7 +32,8 @@ import { runApplier } from './automation/appliers.js';
  *   applied → interview → offer | rejected | no_response | withdrawn
  */
 
-export type AppDoc = JobApplication & DocBase;
+/** Stored application: also remembers whether to submit once you have answered its questions. */
+export type AppDoc = JobApplication & DocBase & { submitAfterAnswers?: boolean };
 
 const FOLLOW_UP_DAYS = 7;
 const ACTIVE_STAGES: ApplicationStage[] = ['tailoring', 'applying'];
@@ -38,6 +42,8 @@ export class ApplicationService {
   /** Applications with a pipeline step running in this process. */
   private active = new Set<string>();
   private prepChain: Promise<unknown> = Promise.resolve();
+  /** Tabs an application left open (paused for your answers), closed when it runs again. */
+  private openPages = new Map<string, Page>();
 
   constructor(
     private ctx: CareerContext,
@@ -62,8 +68,16 @@ export class ApplicationService {
   }
 
   /** A step that was running when the server stopped can never finish: say so and allow Retry. */
-  private async heal(doc: AppDoc): Promise<AppDoc> {
-    if (ACTIVE_STAGES.includes(doc.stage) && !this.active.has(doc.id)) {
+  private async heal(raw: AppDoc): Promise<AppDoc> {
+    // Applications saved before these fields existed.
+    const doc = raw;
+    doc.waitingFor ??= null;
+    doc.pendingQuestions ??= [];
+    doc.answerOverrides ??= [];
+    doc.experienceRequired ??= '';
+    // Only when no process has touched it for a while: on serverless hosts another instance may still be working on it.
+    const stale = Date.now() - Date.parse(doc.updatedAt) > 15 * 60_000;
+    if (ACTIVE_STAGES.includes(doc.stage) && !this.active.has(doc.id) && stale) {
       moveTo(doc, 'needs_attention', 'Interrupted (the app was restarted or the step crashed). Click Retry.');
       await this.save(doc);
     }
@@ -113,6 +127,10 @@ export class ApplicationService {
       hasResumePdf: false,
       coverLetter: '',
       answers: [],
+      waitingFor: null,
+      pendingQuestions: [],
+      answerOverrides: [],
+      experienceRequired: '',
       mode: p.mode,
       stage: 'found',
       reason: '',
@@ -228,15 +246,43 @@ export class ApplicationService {
       return;
     }
     await this.prepare(owner, id, resumeId);
+    await this.autoApplyIfDecided(owner, id);
+  }
+
+  /** After tailoring: apply by itself when the scores allow it (both ≥ auto-approve, or "apply automatically" chosen). */
+  private async autoApplyIfDecided(owner: string, id: string) {
     const after = await this.load(owner, id);
-    if (after.stage === 'ready' && after.mode === 'auto') await this.apply(owner, id, { submit: true, trigger: 'auto' });
+    if (after.stage !== 'ready') return;
+    const settings = await getAgentSettings(this.ctx.store, owner);
+    const lowInfo = after.description.replace(/\s/g, '').length < 200;
+    // Without recognised keywords the ATS score is not meaningful: judge by the match alone.
+    const ats = keywordsKnown(after) ? after.atsAfter : after.matchScore;
+    const decision = lowInfo ? (after.mode === 'auto' ? 'apply' : 'review') : decide(settings, after.matchScore, ats, after.mode === 'auto' ? 'auto' : undefined);
+    if (decision === 'apply') {
+      log(after, 'info', after.mode === 'auto' ? 'Applying automatically (you chose “apply automatically”).' : `Auto-approved: match ${after.matchScore} and tailored ATS ${after.atsAfter} are both ≥ ${settings.autoSubmitMin}.`);
+      await this.save(after);
+      await this.apply(owner, id, { submit: true, trigger: 'auto' });
+    }
+  }
+
+  /** Prepare a job the skip rule left out (you decided to apply anyway). */
+  async prepareAnyway(owner: string, id: string): Promise<JobApplication> {
+    const doc = await this.load(owner, id);
+    if (ACTIVE_STAGES.includes(doc.stage)) throw conflict('This application is already being processed.');
+    doc.matchScore = null;
+    moveTo(doc, 'matched', 'You chose to apply anyway');
+    await this.save(doc);
+    this.background(id, async () => {
+      await this.prepare(owner, id, null, { force: true });
+    });
+    return strip(doc);
   }
 
   /**
    * Match → copy the base resume as "<Role> – <Company>" → tailor to the JD →
    * PDF of that exact version. Leaves the application "ready" (or explains why not).
    */
-  async prepare(owner: string, id: string, resumeId: string | null): Promise<AppDoc> {
+  async prepare(owner: string, id: string, resumeId: string | null, opts: { force?: boolean } = {}): Promise<AppDoc> {
     this.active.add(id);
     const doc = await this.load(owner, id);
     try {
@@ -245,13 +291,22 @@ export class ApplicationService {
         moveTo(doc, 'needs_attention', 'Add a resume first (Resume Builder → upload), then click Retry.');
         return await this.save(doc);
       }
+      const settings = await getAgentSettings(this.ctx.store, owner);
       const base = await this.ctx.resumes.get(baseId, { uid: owner });
+      // Forms / short posts may carry almost no job text: tailoring and the ATS rule need a real description.
+      const lowInfo = doc.description.replace(/\s/g, '').length < 200;
+      const req = experienceRequirement(`${doc.jobTitle}\n${doc.description}`);
+      doc.experienceRequired = req ? `${req.min}${req.max ? `-${req.max}` : '+'} years${req.fresherOk ? ' (freshers welcome)' : ''}` : '';
       if (doc.matchScore === null) {
         const m = matchResume(base.current, doc.description, { weights: this.ctx.config.atsWeights, original: base.original });
         Object.assign(doc, { matchScore: m.score, matchedSkills: m.matched, missingSkills: m.missing, jdAnalysis: m.analysis });
         if (!doc.jobTitle && m.analysis.jobTitle) doc.jobTitle = m.analysis.jobTitle;
         if (!doc.company && m.analysis.company) doc.company = m.analysis.company;
         moveTo(doc, 'matched', `Match ${m.score}/100 against “${base.title}”`);
+      }
+      if (!opts.force && !lowInfo && (doc.matchScore ?? 0) < settings.minMatch) {
+        moveTo(doc, 'skipped', `ATS match ${doc.matchScore} is below ${settings.minMatch}, so this job was left automatically. Use “Apply anyway” if you still want it.`);
+        return await this.save(doc);
       }
       moveTo(doc, 'tailoring', 'Tailoring your resume to this job');
       await this.save(doc);
@@ -260,26 +315,35 @@ export class ApplicationService {
       const clone = await this.ctx.resumes.cloneForJob(baseId, { uid: owner }, { title: doc.jobTitle, company: doc.company, url: doc.jobUrl, applicationId: doc.id, facts: profile.confirmedFacts });
       doc.resumeSessionId = clone.session.id;
       log(doc, 'info', `Created “${clone.session.title}” in Automation resumes.`);
-      let view = await this.ctx.resumes.setJobDescription(clone.session.id, { uid: owner }, doc.description);
-      doc.atsBefore = view.ats?.total ?? doc.matchScore;
-      // The AI JD analysis often knows the real role/company when the page did not say.
-      const jd = view.jdAnalysis;
-      if (jd && ((!doc.jobTitle && jd.jobTitle) || (!doc.company && jd.company))) {
-        doc.jobTitle ||= jd.jobTitle;
-        doc.company ||= jd.company;
-        view = await this.ctx.resumes.setJob(clone.session.id, { uid: owner }, { title: doc.jobTitle, company: doc.company });
+      let view = clone.session;
+      if (doc.description.replace(/\s/g, '').length >= 80) {
+        view = await this.ctx.resumes.setJobDescription(clone.session.id, { uid: owner }, doc.description);
+        doc.atsBefore = view.ats?.total ?? doc.matchScore;
+        // The AI JD analysis often knows the real role/company when the page did not say.
+        const jd = view.jdAnalysis;
+        if (jd && ((!doc.jobTitle && jd.jobTitle) || (!doc.company && jd.company))) {
+          doc.jobTitle ||= jd.jobTitle;
+          doc.company ||= jd.company;
+          view = await this.ctx.resumes.setJob(clone.session.id, { uid: owner }, { title: doc.jobTitle, company: doc.company });
+        }
+        doc.jdAnalysis = jd || doc.jdAnalysis;
+        try {
+          view = await this.ctx.resumes.generate(clone.session.id, { uid: owner });
+          log(doc, 'info', `Tailored: ATS ${doc.atsBefore ?? '—'} → ${view.ats?.total ?? '—'}.`);
+        } catch (e) {
+          if (!(e instanceof AIUnavailableError)) throw e;
+          log(doc, 'warn', 'The AI service was unavailable, so your resume is used as is (it still carries this job’s description). You can Retry tailoring later.');
+        }
+      } else {
+        log(doc, 'warn', 'This link has too little job text to tailor to, so your resume is used as is.');
       }
-      doc.jdAnalysis = jd || doc.jdAnalysis;
-      try {
-        view = await this.ctx.resumes.generate(clone.session.id, { uid: owner });
-        log(doc, 'info', `Tailored: ATS ${doc.atsBefore ?? '—'} → ${view.ats?.total ?? '—'}.`);
-      } catch (e) {
-        if (!(e instanceof AIUnavailableError)) throw e;
-        log(doc, 'warn', 'The AI service was unavailable, so your resume is used as is (it still carries this job’s description). You can Retry tailoring later.');
-      }
-      doc.atsAfter = view.ats?.total ?? doc.atsBefore;
+      doc.atsAfter = view.ats?.total ?? doc.atsBefore ?? doc.matchScore;
       doc.resumeVersionId = view.currentVersion.id;
       await this.writeResumePdf(owner, doc, profile.basics.fullName || view.current.personalInfo.fullName);
+      if (!opts.force && !lowInfo && keywordsKnown(doc) && (doc.atsAfter ?? 0) < settings.minMatch) {
+        moveTo(doc, 'skipped', `Even after tailoring the ATS score is ${doc.atsAfter} (below ${settings.minMatch}), so this job was left automatically. Use “Apply anyway” if you still want it.`);
+        return await this.save(doc);
+      }
       moveTo(doc, 'ready', doc.mode === 'auto' ? 'Tailored resume ready' : 'Ready for your review');
       return await this.save(doc);
     } catch (e) {
@@ -354,6 +418,32 @@ export class ApplicationService {
     return { applied: today.length, linkedin: today.filter((a) => a.source === 'linkedin').length };
   }
 
+  /**
+   * Your answers to the questions an application paused on. Each answer is
+   * remembered in your Career Profile (unless you untick it) so the same
+   * question is filled next time, then the application continues.
+   */
+  async provideAnswers(owner: string, id: string, input: { answers: Array<{ question: string; answer: string; remember: boolean }>; submit?: boolean }): Promise<JobApplication> {
+    const doc = await this.load(owner, id);
+    if (ACTIVE_STAGES.includes(doc.stage)) throw conflict('This application is already being processed.');
+    if (!doc.resumeSessionId) throw conflict('Prepare the tailored resume first (Retry).');
+    for (const a of input.answers) {
+      const answer = a.answer.trim();
+      if (!answer) continue;
+      doc.answerOverrides = [...doc.answerOverrides.filter((o) => normQuestion(o.question) !== normQuestion(a.question)), { question: a.question, answer }];
+      if (a.remember) await this.profiles.saveAnswer(owner, { question: a.question, answer });
+    }
+    const unanswered = doc.pendingQuestions.filter((q) => q.required && !doc.answerOverrides.some((o) => normQuestion(o.question) === normQuestion(q.question)));
+    if (unanswered.length) throw badRequest(`Please answer: ${unanswered.map((q) => q.question).join(' · ')}`);
+    const submit = input.submit ?? doc.submitAfterAnswers ?? true;
+    doc.waitingFor = null;
+    doc.pendingQuestions = [];
+    moveTo(doc, 'applying', `You answered ${input.answers.length} question${input.answers.length === 1 ? '' : 's'}: continuing`);
+    await this.save(doc);
+    this.background(doc.id, () => this.apply(owner, id, { submit, trigger: 'user' }));
+    return strip(doc);
+  }
+
   /** Approve & apply (review mode) or fill only. Runs in the background; poll the application. */
   async approve(owner: string, id: string, submit: boolean): Promise<JobApplication> {
     const doc = await this.load(owner, id);
@@ -406,7 +496,11 @@ export class ApplicationService {
         coverLetter: makeCover,
         wantCoverLetter: settings.coverLetters,
         ai,
+        overrides: doc.answerOverrides,
       });
+      // A tab left open by an earlier attempt (paused for your answers) is replaced by this run.
+      await this.openPages.get(doc.id)?.close().catch(() => undefined);
+      this.openPages.delete(doc.id);
       const outcome = await this.browser.exclusive((bctx) =>
         runApplier(
           bctx,
@@ -415,14 +509,25 @@ export class ApplicationService {
             engine,
             files: { resume: resumeFile, cover: async () => (settings.coverLetters ? this.coverLetterPdf(owner, doc, await makeCover(), fullName) : null) },
             log: (m) => log(doc, 'info', m),
+            reviewAnswers: settings.reviewAnswers,
+            confirmed: doc.answerOverrides.map((o) => o.question),
+            onPage: (p) => this.openPages.set(doc.id, p),
           },
         ),
       );
       doc.answers = outcome.answers;
+      doc.waitingFor = null;
+      doc.pendingQuestions = [];
       if (outcome.status === 'submitted') {
         doc.appliedAt = now();
         doc.followUpAt = addDays(doc.appliedAt, FOLLOW_UP_DAYS);
+        this.openPages.delete(doc.id);
         moveTo(doc, 'applied', outcome.reason || (opts.trigger === 'user' ? 'Submitted' : 'Submitted automatically'));
+      } else if (outcome.status === 'needs_input' || outcome.status === 'needs_review') {
+        doc.waitingFor = outcome.status === 'needs_input' ? 'answers' : 'review';
+        doc.pendingQuestions = outcome.questions || [];
+        doc.submitAfterAnswers = opts.submit;
+        moveTo(doc, 'needs_attention', outcome.reason);
       } else if (outcome.status === 'filled') {
         moveTo(doc, 'needs_attention', outcome.reason);
       } else {
@@ -531,11 +636,17 @@ export function log(doc: JobApplication, level: LogEntry['level'], message: stri
   doc.log.push({ at: now(), level, message: message.slice(0, 500) });
 }
 
+/** The job analysis recognised skills/keywords, so ATS scores for it are meaningful. */
+export function keywordsKnown(doc: Pick<JobApplication, 'jdAnalysis'>): boolean {
+  const a = doc.jdAnalysis;
+  return !!a && a.requiredSkills.length + a.preferredSkills.length + a.atsKeywords.length > 0;
+}
+
 export function addDays(iso: string, days: number): string {
   return new Date(new Date(iso).getTime() + days * 86_400_000).toISOString();
 }
 
 function strip(doc: AppDoc | JobApplication): JobApplication {
-  const { ownerUid: _o, ...rest } = doc as AppDoc;
+  const { ownerUid: _o, submitAfterAnswers: _s, ...rest } = doc as AppDoc;
   return rest;
 }

@@ -6,6 +6,20 @@ import { loadConfig, type AppConfig } from '../src/config.js';
 import { SqliteStore } from '../src/db/sqliteStore.js';
 import { AIChain, type AIJsonRequest, type AIProvider } from '../src/ai/provider.js';
 import { createApp } from '../src/app.js';
+import { BrowserManager } from '../src/career/automation/browser.js';
+
+/** API tests never drive a real browser: every browser task fails fast. */
+export class NoBrowser extends BrowserManager {
+  constructor() {
+    super({ browserProfileDir: os.tmpdir(), browserChannel: 'chrome', headless: true, filesDir: os.tmpdir(), forceDryRun: true });
+  }
+  override async context(): Promise<never> {
+    throw new Error('No browser in API tests.');
+  }
+  override async readPage() {
+    return null;
+  }
+}
 
 export const FIXTURES = path.resolve(__dirname, 'fixtures');
 export const LOCAL_FIXTURES = path.resolve(__dirname, 'fixtures');
@@ -143,7 +157,7 @@ export async function makeApp(opts: { dbFile?: string; ai?: AIProvider | null; c
     if (!t.startsWith('user:')) throw new Error('bad token');
     return { uid: t.slice(5) };
   };
-  const { app, service, career } = await createApp({ config, store, ai, verifyIdToken });
+  const { app, service, career } = await createApp({ config, store, ai, verifyIdToken, browser: new NoBrowser() });
   return { app, service, career, store, fake: fake as FakeAI | null, config, dataDir };
 }
 

@@ -62,6 +62,14 @@ export function careerRoutes(m: CareerModules, config: AppConfig): Router {
   }));
   r.post('/applications/:id/approve', wrap(async (req, res) => res.status(202).json(await m.apps.approve(ownerOf(req), req.params.id, body(z.object({ submit: z.boolean() }), req).submit))));
   r.post('/applications/:id/retry', ai, wrap(async (req, res) => res.status(202).json(await m.apps.retry(ownerOf(req), req.params.id))));
+  r.post('/applications/:id/prepare-anyway', ai, wrap(async (req, res) => res.status(202).json(await m.apps.prepareAnyway(ownerOf(req), req.params.id))));
+  r.post(
+    '/applications/:id/answers',
+    wrap(async (req, res) => {
+      const b = body(z.object({ answers: z.array(z.object({ question: z.string().trim().min(1).max(600), answer: z.string().max(4000), remember: z.boolean().default(true) })).min(1).max(50), submit: z.boolean().optional() }), req);
+      res.status(202).json(await m.apps.provideAnswers(ownerOf(req), req.params.id, b));
+    }),
+  );
   r.post('/applications/:id/stage', wrap(async (req, res) => res.json(await m.apps.setStage(ownerOf(req), req.params.id, body(Stage, req)))));
   r.post('/applications/:id/email', ai, wrap(async (req, res) => res.json(await m.tracker.emailDraft(ownerOf(req), req.params.id, body(z.object({ kind: z.enum(['follow_up', 'thank_you', 'withdraw']) }), req).kind))));
   r.get('/applications/:id/resume.pdf', wrap(async (req, res) => {

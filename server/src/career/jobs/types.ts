@@ -1,5 +1,6 @@
 import type { JobSourceId } from '../../../../shared/careerTypes.js';
 import { hashOf } from '../context.js';
+import type { ExperienceRange } from '../../../../shared/experience.js';
 
 /** A job as found by a source or read from a link, before it becomes an application. */
 export interface JobPosting {
@@ -18,6 +19,8 @@ export interface JobPosting {
   needsBrowser?: boolean;
   /** LinkedIn only: Easy Apply (true) or apply on the company's site (false). */
   easyApply?: boolean;
+  /** Experience shown on a portal card, e.g. "5-7 Yrs". */
+  experienceText?: string;
 }
 
 export interface SearchQuery {
@@ -28,6 +31,8 @@ export interface SearchQuery {
   locations: string[];
   remoteOk: boolean;
   postedWithinDays: number;
+  /** Your experience range (portals filter by it when they can). */
+  experience?: ExperienceRange | null;
 }
 
 export interface JobSource {

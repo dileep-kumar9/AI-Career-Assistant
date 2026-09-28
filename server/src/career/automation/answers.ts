@@ -10,7 +10,7 @@ import { normQuestion, profileToText } from '../profile.js';
  * "Needs attention" — the agent never guesses.
  */
 
-export type FieldKind = 'text' | 'email' | 'tel' | 'url' | 'number' | 'date' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'checkboxGroup' | 'combobox' | 'file';
+export type FieldKind = 'text' | 'email' | 'tel' | 'url' | 'number' | 'date' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'checkboxGroup' | 'combobox' | 'listbox' | 'file';
 
 export interface FieldInfo {
   key: string;
@@ -34,6 +34,8 @@ export interface AnswerContext {
   coverLetter: () => Promise<string>;
   wantCoverLetter: boolean;
   ai: AIChain | null;
+  /** Answers you gave for this application: used before anything else. */
+  overrides?: Array<{ question: string; answer: string }>;
 }
 
 export interface FieldAnswer {
@@ -102,7 +104,7 @@ export function ruleAnswer(f: FieldInfo, ctx: AnswerContext): FieldAnswer | null
     [/disabilit/, 'disability'],
   ];
   for (const [re, key] of diversity) {
-    if (has(label, re) && ['select', 'radio', 'combobox'].includes(f.kind)) {
+    if (has(label, re) && ['select', 'radio', 'combobox', 'listbox'].includes(f.kind)) {
       const own = p.diversity[key] && bestOption(p.diversity[key], f.options);
       const decline = f.options.find((o) => DECLINE.test(o));
       if (own) return { value: own, source: 'profile', confident: true };
@@ -176,7 +178,7 @@ function savedAnswer(f: FieldInfo, p: CareerProfile): FieldAnswer | null {
 
 /** Makes an answer fit the field (option text, digits, yes/no). */
 export function conform(f: FieldInfo, a: FieldAnswer): FieldAnswer {
-  if (['select', 'radio', 'combobox'].includes(f.kind) && f.options.length) {
+  if (['select', 'radio', 'combobox', 'listbox'].includes(f.kind) && f.options.length) {
     const opt = bestOption(a.value, f.options);
     return opt ? { ...a, value: opt } : { ...a, confident: false };
   }
@@ -199,6 +201,8 @@ export class AnswerEngine {
   constructor(private ctx: AnswerContext) {}
 
   async answer(f: FieldInfo): Promise<FieldAnswer | null> {
+    const own = (this.ctx.overrides || []).find((o) => normQuestion(o.question) === normQuestion(f.label));
+    if (own && own.answer.trim() && f.kind !== 'file') return conform(f, { value: own.answer, source: 'user', confident: true });
     const rule = ruleAnswer(f, this.ctx);
     if (rule) return rule.file ? rule : conform(f, rule);
     const saved = savedAnswer(f, this.ctx.profile);
@@ -212,7 +216,7 @@ export class AnswerEngine {
     try {
       const { data } = await runPrompt(this.ctx.ai, answerQuestion, {
         question: f.label,
-        fieldType: f.kind === 'combobox' ? 'select' : f.kind === 'checkboxGroup' ? 'checkbox' : f.kind === 'email' || f.kind === 'tel' || f.kind === 'url' ? 'text' : f.kind,
+        fieldType: f.kind === 'combobox' || f.kind === 'listbox' ? 'select' : f.kind === 'checkboxGroup' ? 'checkbox' : f.kind === 'email' || f.kind === 'tel' || f.kind === 'url' ? 'text' : f.kind,
         options: f.options,
         required: f.required,
         profile: profileToText(this.ctx.profile),

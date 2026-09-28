@@ -118,13 +118,81 @@ describe('form filler + appliers (real Chrome, local fixtures)', () => {
   it('stops with "needs attention" instead of guessing an unanswerable required question', async (t) => {
     if (!chromeOk) return t.skip();
     const out = await run('unanswerable.html', true);
-    expect(out.status).toBe('needs_attention');
+    expect(out.status).toBe('needs_input');
     expect(out.reason).toMatch(/security clearance/i);
+    expect(out.questions?.[0]).toMatchObject({ question: expect.stringMatching(/security clearance/i), options: ['Yes', 'No'], required: true });
     const ctx = await browser.context();
     const open = ctx.pages().find((p) => p.url().endsWith('unanswerable.html'));
     expect(await open!.evaluate(() => (window as any).__submitted ?? null)).toBeNull();
     await open!.close();
   }, 90_000);
+
+  it('LinkedIn Easy Apply: uploads and selects the tailored resume, asks you what it cannot answer, then submits with your answers', async (t) => {
+    if (!chromeOk) return t.skip();
+    const tailored = path.join(tmp, 'Asha_Rao_Resume.pdf');
+    fs.copyFileSync(resumePdf, tailored);
+    const deps = (eng: AnswerEngine, confirmed: string[] = []) => ({ engine: eng, files: { resume: tailored, cover: async () => null }, log: () => undefined, allowPrivateHosts: true, forceKind: 'linkedin' as const, reviewAnswers: true, confirmed });
+    // 1st run: two questions only the candidate can answer → needs_input (no guessing)
+    const first = await browser.exclusive((ctx) => runApplier(ctx, task('linkedin-like.html', true), deps(engine())));
+    expect(first.status).toBe('needs_input');
+    expect(first.questions?.map((q) => q.question)).toEqual(['Do you have 7+ years of experience in Python & FastAPI/REST APIs?', 'Can you join immediately to 15 days after selection?']);
+    expect(first.questions?.[0].options).toEqual(['Yes', 'No']);
+    for (const p of (await browser.context()).pages()) if (p.url().includes('linkedin-like')) await p.close();
+    // 2nd run with the answers you gave → uploaded tailored resume selected, follow unticked, submitted
+    const overrides = [
+      { question: 'Do you have 7+ years of experience in Python & FastAPI/REST APIs?', answer: 'No' },
+      { question: 'Can you join immediately to 15 days after selection?', answer: 'Yes' },
+    ];
+    const eng = engine();
+    (eng as any).ctx.overrides = overrides;
+    let submitted: any = null;
+    const out = await browser.exclusive(async (ctx) => {
+      const o = await runApplier(ctx, { ...task('linkedin-like.html', true) }, { ...deps(eng, overrides.map((x) => x.question)), onPage: (p) => p.on('close', () => undefined) });
+      return o;
+    });
+    expect(out.status).toBe('submitted');
+    submitted = out.answers;
+    expect(submitted.find((a: any) => /7\+ years/.test(a.question))?.answer).toBe('No');
+  }, 120_000);
+
+  it('LinkedIn fixture records the uploaded tailored resume and never follows the company', async (t) => {
+    if (!chromeOk) return t.skip();
+    const tailored = path.join(tmp, 'Asha_Rao_Resume.pdf');
+    fs.copyFileSync(resumePdf, tailored);
+    const eng = engine();
+    (eng as any).ctx.overrides = [
+      { question: 'Do you have 7+ years of experience in Python & FastAPI/REST APIs?', answer: 'No' },
+      { question: 'Can you join immediately to 15 days after selection?', answer: 'Yes' },
+    ];
+    const ctx = await browser.context();
+    let page: import('playwright-core').Page | null = null;
+    const out = await browser.exclusive((c) => runApplier(c, task('linkedin-like.html', false), { engine: eng, files: { resume: tailored, cover: async () => null }, log: () => undefined, allowPrivateHosts: true, forceKind: 'linkedin', onPage: (p) => (page = p) }));
+    expect(out.status).toBe('filled'); // fill-only: stops at Submit
+    expect(await page!.evaluate(() => (window as any).__uploaded)).toBe('Asha_Rao_Resume.pdf');
+    expect(await page!.isChecked('input[value="new"]')).toBe(true);
+    expect(await page!.isChecked('#follow-company-checkbox')).toBe(false);
+    await page!.close();
+    void ctx;
+  }, 120_000);
+
+  it('Google Forms: fills ARIA radios, dropdowns and checkboxes over two pages, and pauses to review a remembered answer', async (t) => {
+    if (!chromeOk) return t.skip();
+    const eng = engine({ willingToRelocate: null });
+    (eng as any).ctx.profile.savedAnswers = [{ id: 's1', question: 'Are you willing to relocate?', answer: 'Yes', updatedAt: new Date().toISOString() }];
+    const base = { engine: eng, files: { resume: resumePdf, cover: async () => null }, log: () => undefined, allowPrivateHosts: true, forceKind: 'google_forms' as const, reviewAnswers: true };
+    const paused = await browser.exclusive((ctx) => runApplier(ctx, task('google-forms-like.html', true), base));
+    expect(paused.status).toBe('needs_review');
+    expect(paused.questions).toEqual([expect.objectContaining({ question: 'Are you willing to relocate?', suggested: 'Yes', source: 'saved' })]);
+    for (const p of (await browser.context()).pages()) if (p.url().includes('google-forms-like')) await p.close();
+    let page: import('playwright-core').Page | null = null;
+    const done = await browser.exclusive((ctx) => runApplier(ctx, task('google-forms-like.html', true), { ...base, confirmed: ['Are you willing to relocate?'], onPage: (p) => (page = p) }));
+    expect(done.status).toBe('submitted');
+    const byQ = Object.fromEntries(done.answers.map((a) => [a.question, a.answer]));
+    expect(byQ['Full name']).toBe('Asha Rao');
+    expect(byQ['Current city']).toBe('Hyderabad');
+    expect(byQ['Are you willing to relocate?']).toBe('Yes');
+    void page;
+  }, 120_000);
 
   it('refuses to open private-network apply links outside tests', async (t) => {
     if (!chromeOk) return t.skip();

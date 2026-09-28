@@ -5,7 +5,10 @@ import type {
   AssistantMessage,
   CareerProfile,
   InterviewAttempt,
+  InterviewSession,
   InterviewSet,
+  InterviewTurn,
+  AnswerMetrics,
   JobApplication,
   LearningPlan,
   ProposedAction,
@@ -131,6 +134,16 @@ export const career = {
   createInterview: (b: { applicationId?: string; role?: string; company?: string; jobDescription?: string; count?: number }) => req<InterviewSet>('POST', '/interviews', b),
   answerQuestion: (id: string, questionId: string, answer: string) => req<{ set: InterviewSet; attempt: InterviewAttempt }>('POST', `/interviews/${id}/answer`, { questionId, answer }),
   removeInterview: (id: string) => req<void>('DELETE', `/interviews/${id}`),
+
+  // live / coached interview sessions
+  interviewSessions: () => req<{ sessions: InterviewSession[]; folderRoot: string }>('GET', '/interview-sessions'),
+  interviewSession: (id: string) => req<InterviewSession>('GET', `/interview-sessions/${id}`),
+  startInterview: (b: { mode: 'live' | 'coach'; applicationId?: string; role?: string; company?: string; jobDescription?: string; count?: number }) => req<InterviewSession>('POST', '/interview-sessions', b),
+  respondInterview: (id: string, answer: string, metrics: AnswerMetrics) => req<{ session: InterviewSession; said: InterviewTurn[] }>('POST', `/interview-sessions/${id}/respond`, { answer, metrics }),
+  interviewHint: (id: string) => req<{ session: InterviewSession; said: InterviewTurn[] }>('POST', `/interview-sessions/${id}/hint`),
+  skipInterviewQuestion: (id: string) => req<{ session: InterviewSession; said: InterviewTurn[] }>('POST', `/interview-sessions/${id}/skip`),
+  finishInterview: (id: string) => req<InterviewSession>('POST', `/interview-sessions/${id}/finish`),
+  removeInterviewSession: (id: string) => req<void>('DELETE', `/interview-sessions/${id}`),
 
   // skills
   gaps: (role = '', days = 30) => req<SkillGapReport>('GET', `/skills/gaps?role=${encodeURIComponent(role)}&days=${days}`),

@@ -115,7 +115,8 @@ export class InterviewService {
     await this.ctx.store.docDelete('interviews', id);
   }
 
-  async create(owner: string, input: z.infer<typeof CreateSetInput>): Promise<InterviewSet> {
+  /** Role, company, JD, resume text and a question plan for one job (AI, else rule-based). */
+  async plan(owner: string, input: z.infer<typeof CreateSetInput>) {
     let role = input.role || '';
     let company = input.company || '';
     let jd = input.jobDescription || '';
@@ -130,20 +131,26 @@ export class InterviewService {
     if (!resumeId) throw badRequest('Add a resume first so the questions can be based on it.');
     if (!role && !jd) throw badRequest('Choose an application or give a role / job description.');
     const resume = (await this.ctx.resumes.get(resumeId, { uid: owner })).current;
+    const resumeText = resumeToPlainText(resume, { visibleOnly: true });
     let questions: InterviewQuestion[] = [];
     let method: InterviewSet['method'] = 'rule-based';
     if (this.ctx.ai.available) {
       try {
-        const { data } = await runPrompt(this.ctx.ai, interviewQuestions, { resumeText: resumeToPlainText(resume, { visibleOnly: true }), job: { title: role, company, description: jd || role }, count: input.count }, (d) => {
-          if (d.questions.length < 5) throw new Error('Too few questions.');
+        const { data } = await runPrompt(this.ctx.ai, interviewQuestions, { resumeText, job: { title: role, company, description: jd || role }, count: input.count }, (d) => {
+          if (d.questions.length < Math.min(5, input.count)) throw new Error('Too few questions.');
         });
-        questions = data.questions.map((q) => ({ id: newId(), ...q }));
+        questions = data.questions.slice(0, input.count).map((q) => ({ id: newId(), ...q }));
         method = 'ai';
       } catch {
         /* fall back */
       }
     }
     if (!questions.length) questions = ruleQuestions(resume, role, jd, input.count);
+    return { role, company, jd, resumeText, questions, method, applicationId: input.applicationId || null };
+  }
+
+  async create(owner: string, input: z.infer<typeof CreateSetInput>): Promise<InterviewSet> {
+    const { role, company, questions, method } = await this.plan(owner, input);
     const t = now();
     const doc: SetDoc = { id: newId(), ownerUid: owner, applicationId: input.applicationId || null, role, company, questions, attempts: [], method, createdAt: t, updatedAt: t };
     await this.ctx.store.docPut('interviews', doc);

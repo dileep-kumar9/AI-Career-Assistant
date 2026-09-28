@@ -8,6 +8,7 @@ import { type CareerContext, hashOf, now } from './context.js';
 import type { ApplicationService } from './applications.js';
 import type { AgentService } from './agent.js';
 import type { InterviewService } from './interview.js';
+import type { InterviewSessionService } from './interviewSession.js';
 import { type ProfileService, profileToText } from './profile.js';
 import type { SkillsService } from './skills.js';
 
@@ -116,15 +117,16 @@ const cosine = (a: number[], b: number[]) => {
 export class RagService {
   constructor(
     private ctx: CareerContext,
-    private deps: { profiles: ProfileService; apps: ApplicationService; interviews: InterviewService; skills: SkillsService; agent: AgentService },
+    private deps: { profiles: ProfileService; apps: ApplicationService; interviews: InterviewService; sessions: InterviewSessionService; skills: SkillsService; agent: AgentService },
   ) {}
 
   async corpus(owner: string): Promise<{ chunks: Chunk[]; apps: JobApplication[] }> {
     const chunks: Chunk[] = [];
-    const [profile, apps, sets, plans, runs] = await Promise.all([
+    const [profile, apps, sets, sessions, plans, runs] = await Promise.all([
       this.deps.profiles.get(owner),
       this.deps.apps.list(owner),
       this.deps.interviews.list(owner).catch(() => []),
+      this.deps.sessions.list(owner).catch(() => []),
       this.deps.skills.plans(owner).catch(() => []),
       this.deps.agent.runs(owner, 3).catch(() => []),
     ]);
@@ -144,6 +146,16 @@ export class RagService {
     for (const s of sets.slice(0, 20)) {
       const scored = s.attempts.slice(-10).map((t) => `${s.questions.find((q) => q.id === t.questionId)?.question.slice(0, 80)} → ${t.score}/10`);
       chunks.push({ id: `iv-${s.id}`, source: 'interview', label: `Interview prep: ${s.role} at ${s.company}`, text: `Interview practice for ${s.role} at ${s.company} (${s.questions.length} questions, ${s.attempts.length} answers). Recent scores: ${scored.join('; ') || 'none yet'}.`, ref: s.applicationId || undefined });
+    }
+    for (const s of sessions.slice(0, 20)) {
+      const answers = s.turns.filter((t) => t.analysis).slice(-12);
+      chunks.push({
+        id: `is-${s.id}`,
+        source: 'interview',
+        label: `Interview ${s.folder}`,
+        text: `${s.mode === 'live' ? 'Live AI' : 'Coached'} interview practice for ${s.role}${s.company ? ` at ${s.company}` : ''} on ${date(s.createdAt)} (${s.status}${s.summary ? `, overall ${s.summary.overallScore}/10, ${s.summary.readiness.replace('_', ' ')}` : ''}). ${s.summary?.improve.length ? `Practise next: ${s.summary.improve.join('; ')}. ` : ''}Answers: ${answers.map((t) => `${s.questions[t.questionIndex]?.question.slice(0, 70)} → ${t.analysis!.verdict.replace('_', ' ')} ${t.analysis!.score}/10 (${t.analysis!.confidence})`).join('; ') || 'none yet'}.`,
+        ref: s.applicationId || undefined,
+      });
     }
     for (const p of plans.slice(0, 30)) chunks.push({ id: `lp-${p.id}`, source: 'learning', label: `Learning plan: ${p.skill}`, text: `Learning plan for ${p.skill} (${p.status}; ${p.steps.filter((s) => s.done).length}/${p.steps.length} steps done). Proof project: ${p.proofProject.title}. ${p.confirmation ? `Confirmed: ${p.confirmation.statement}` : ''}` });
     const missing = new Map<string, number>();

@@ -302,6 +302,123 @@ Return the JSON.`,
   }),
 });
 
+// ---------------------------------------------------------------- live interview: judge an answer and decide what the interviewer says next
+
+export interface TurnVars {
+  role: string;
+  company: string;
+  question: string;
+  /** The follow-up being answered, when this is a follow-up. */
+  followUp: string;
+  idealPoints: string[];
+  answer: string;
+  /** Deterministic delivery signals (fillers, hedging, pauses, length). */
+  delivery: string[];
+  followUpsSoFar: number;
+  resumeText: string;
+  jobDescription: string;
+}
+export const interviewTurn = definePrompt({
+  id: 'interview.turn',
+  version: 1,
+  task: 'interview_turn',
+  schema: S.obj({
+    verdict: S.enumOf(['correct', 'partially_correct', 'incorrect', 'unclear']),
+    score: S.num('0-10'),
+    clarity: S.enumOf(['clear', 'somewhat_clear', 'unclear']),
+    confidence: S.enumOf(['confident', 'hesitant', 'unsure']),
+    strengths: S.arr(S.str()),
+    gaps: S.arr(S.str(), 'What is missing or wrong'),
+    followUp: S.str('ONE short connecting question a real interviewer would ask next to probe the gap or unclear part, or "" if the answer is complete'),
+    clarification: S.str('2-3 plain sentences explaining the correct idea the candidate missed, as an interviewer would briefly clarify; "" when correct'),
+    acknowledgement: S.str('One short, natural spoken reaction to the answer (no score), e.g. "Okay, that makes sense."'),
+    suggestion: S.str('How to answer better next time (structure, specifics)'),
+    suggestedAnswer: S.str('A stronger answer using ONLY facts from the resume and the candidate answer; [add your own example] where a fact is missing'),
+  }),
+  output: z.object({
+    verdict: z.enum(['correct', 'partially_correct', 'incorrect', 'unclear']).catch('unclear'),
+    score: z.coerce.number().min(0).max(10),
+    clarity: z.enum(['clear', 'somewhat_clear', 'unclear']).catch('somewhat_clear'),
+    confidence: z.enum(['confident', 'hesitant', 'unsure']).catch('hesitant'),
+    strengths: strList(5),
+    gaps: strList(5),
+    followUp: str(400),
+    clarification: str(800),
+    acknowledgement: str(200),
+    suggestion: str(800),
+    suggestedAnswer: str(3000),
+  }),
+  build: (v: TurnVars) => ({
+    system: `You are a realistic, fair interviewer for a ${v.role || 'job'} role${v.company ? ` at ${v.company}` : ''}, running a live interview.\n${UNTRUSTED_DATA_RULE}\n${HONESTY}
+- Judge the candidate's answer to the question being asked (the follow-up if there is one).
+- verdict: correct = accurate and complete enough; partially_correct = right direction but missing key points; incorrect = wrong; unclear = vague, rambling or you cannot tell what they mean.
+- Use the delivery signals only to judge confidence/clarity (fillers, hedging, long pauses), never to invent content.
+- If the answer is not fully correct or not clear, write ONE connecting follow-up question that helps the candidate get to the missing point (like "What would you check first in that case?"), not a new topic. ${v.followUpsSoFar >= 2 ? 'Two follow-ups were already asked: set followUp to "" and give a clarification instead.' : ''}
+- The suggested answer must not invent achievements, numbers or tools that are not in the resume or the candidate's answer.
+- Speak naturally and briefly in acknowledgement / followUp: these are read aloud.`,
+    prompt: `Original question: ${v.question}\n${v.followUp ? `Follow-up being answered: ${v.followUp}\n` : ''}A strong answer covers: ${v.idealPoints.join('; ') || 'n/a'}\nDelivery signals: ${v.delivery.join('; ') || 'none'}\n${untrusted('candidate_answer', v.answer || '(no answer)', 6000)}\n${untrusted('resume', v.resumeText, 10_000)}\n${untrusted('job_posting', v.jobDescription || '(none)', 6000)}\n\nReturn the JSON.`,
+  }),
+});
+
+// ---------------------------------------------------------------- live interview: hint and model answer when the candidate is stuck or silent
+
+export interface AssistVars {
+  role: string;
+  question: string;
+  idealPoints: string[];
+  resumeText: string;
+}
+export const interviewAssist = definePrompt({
+  id: 'interview.assist',
+  version: 1,
+  task: 'interview_turn',
+  effort: 'low',
+  schema: S.obj({
+    hint: S.str('A short spoken nudge that points the candidate in the right direction without giving the full answer'),
+    modelAnswer: S.str('A concise model answer using ONLY facts from the resume; [add your own example] where the resume has no fact'),
+  }),
+  output: z.object({ hint: str(500), modelAnswer: str(3000) }),
+  build: (v: AssistVars) => ({
+    system: `You help a candidate who is stuck in a ${v.role || 'job'} interview.\n${UNTRUSTED_DATA_RULE}\n${HONESTY}\nThe hint is read aloud: one or two short sentences.`,
+    prompt: `Question: ${v.question}\nA strong answer covers: ${v.idealPoints.join('; ') || 'n/a'}\n${untrusted('resume', v.resumeText, 10_000)}\n\nReturn the JSON.`,
+  }),
+});
+
+// ---------------------------------------------------------------- interview summary
+
+export interface SummaryVars {
+  role: string;
+  company: string;
+  transcript: string;
+}
+export const interviewSummary = definePrompt({
+  id: 'interview.summary',
+  version: 1,
+  task: 'interview_summary',
+  schema: S.obj({
+    overallScore: S.num('0-10'),
+    readiness: S.enumOf(['ready', 'almost', 'needs_practice']),
+    strengths: S.arr(S.str()),
+    improve: S.arr(S.str(), 'Most important things to practise, most important first'),
+  }),
+  output: z.object({
+    overallScore: z.coerce.number().min(0).max(10),
+    readiness: z.enum(['ready', 'almost', 'needs_practice']).catch('almost'),
+    strengths: strList(6),
+    improve: strList(6),
+  }),
+  build: (v: SummaryVars) => ({
+    system: `You are an interview coach writing a short debrief after a mock interview for ${v.role || 'a job'}${v.company ? ` at ${v.company}` : ''}.\n${UNTRUSTED_DATA_RULE}\nBe specific (name the questions/topics) and encouraging but honest.`,
+    prompt: `${untrusted('history', v.transcript, 30_000)}\n\nReturn the JSON.`,
+  }),
+});
+
+PROMPT_CATALOG.push(
+  { id: interviewTurn.id, version: interviewTurn.version, purpose: 'Live interview: judge an answer, decide follow-up or clarification' },
+  { id: interviewAssist.id, version: interviewAssist.version, purpose: 'Live interview: hint and model answer when the candidate is stuck' },
+  { id: interviewSummary.id, version: interviewSummary.version, purpose: 'Debrief after a mock interview' },
+);
+
 PROMPT_CATALOG.push(
   { id: profileFromResume.id, version: profileFromResume.version, purpose: 'Career Profile suggestions (roles, skills, seniority) from a resume' },
   { id: answerQuestion.id, version: answerQuestion.version, purpose: 'Answer an application-form question truthfully (or decline)' },

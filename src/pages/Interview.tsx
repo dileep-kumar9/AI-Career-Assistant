@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Mic, MicOff, Plus, Trash2 } from 'lucide-react';
-import type { InterviewAttempt, InterviewSet } from '../../shared/careerTypes';
+import { FolderOpen, Loader2, MessageSquareText, Mic, Trash2 } from 'lucide-react';
 import { TRACKER_STAGES } from '../../shared/careerTypes';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
@@ -11,257 +10,150 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Empty, errMsg, fmtDate } from '@/components/career/bits';
+import { InterviewRoom } from '@/components/interview/InterviewRoom';
 import { toast } from '@/hooks/use-toast';
 import { career } from '@/lib/careerApi';
 import { cn } from '@/lib/utils';
 
-/** The parts of the Web Speech API used here (not in TypeScript's DOM types). */
-interface SpeechResultEvent {
-  resultIndex: number;
-  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
-}
-interface Recognizer {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((e: SpeechResultEvent) => void) | null;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-  start(): void;
-  stop(): void;
-}
-type RecognizerCtor = new () => Recognizer;
-
-/** Browser speech-to-text (Chrome/Edge). Returns null where unsupported. */
-function useDictation(onText: (t: string) => void) {
-  const rec = useRef<Recognizer | null>(null);
-  const [on, setOn] = useState(false);
-  const w = typeof window !== 'undefined' ? (window as unknown as { SpeechRecognition?: RecognizerCtor; webkitSpeechRecognition?: RecognizerCtor }) : null;
-  const Ctor = w ? w.SpeechRecognition || w.webkitSpeechRecognition || null : null;
-  const start = () => {
-    if (!Ctor) return;
-    const r = new Ctor();
-    r.continuous = true;
-    r.interimResults = false;
-    r.lang = navigator.language || 'en-US';
-    r.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) onText(e.results[i][0].transcript.trim());
-    };
-    r.onend = () => setOn(false);
-    r.onerror = () => setOn(false);
-    r.start();
-    rec.current = r;
-    setOn(true);
-  };
-  const stop = () => rec.current?.stop();
-  useEffect(() => () => rec.current?.stop(), []);
-  return Ctor ? { on, start, stop } : null;
-}
-
-function Feedback({ a }: { a: InterviewAttempt }) {
-  return (
-    <div className="rounded-lg border bg-muted/30 p-3 space-y-2 text-sm">
-      <div className="flex items-center gap-2">
-        <span className={cn('text-2xl font-bold', a.score >= 7 ? 'text-emerald-600' : a.score >= 4 ? 'text-amber-600' : 'text-rose-600')}>{a.score}/10</span>
-        <span className="text-xs text-muted-foreground">{a.method === 'ai' ? 'AI coach' : 'Rule-based coach'} · {fmtDate(a.at, true)}</span>
-      </div>
-      {a.strengths.length > 0 && (
-        <div>
-          <div className="text-xs font-semibold">Good</div>
-          <ul className="list-disc pl-5">{a.strengths.map((s) => <li key={s}>{s}</li>)}</ul>
-        </div>
-      )}
-      {a.missing.length > 0 && (
-        <div>
-          <div className="text-xs font-semibold">Improve</div>
-          <ul className="list-disc pl-5">{a.missing.map((s) => <li key={s}>{s}</li>)}</ul>
-        </div>
-      )}
-      <div>
-        <div className="text-xs font-semibold">A stronger answer (uses only your real experience)</div>
-        <p className="whitespace-pre-wrap">{a.improvedAnswer}</p>
-      </div>
-      {a.followUp && <p className="text-xs text-muted-foreground">Likely follow-up: {a.followUp}</p>}
-    </div>
-  );
-}
-
-function Practice({ set }: { set: InterviewSet }) {
-  const qc = useQueryClient();
-  const [current, setCurrent] = useState(set.questions[0]?.id);
-  const [answer, setAnswer] = useState('');
-  const q = set.questions.find((x) => x.id === current) || set.questions[0];
-  const attempts = set.attempts.filter((a) => a.questionId === q?.id);
-  const dictation = useDictation((t) => setAnswer((prev) => (prev ? `${prev} ${t}` : t)));
-  const submit = useMutation({
-    mutationFn: () => career.answerQuestion(set.id, q.id, answer),
-    onSuccess: ({ set: next }) => {
-      qc.setQueryData(['interview', set.id], next);
-      qc.invalidateQueries({ queryKey: ['interviews'] });
-      setAnswer('');
-    },
-    onError: (e) => toast({ title: 'Could not evaluate', description: errMsg(e), variant: 'destructive' }),
-  });
-  const avg = useMemo(() => {
-    const best = new Map<string, number>();
-    for (const a of set.attempts) best.set(a.questionId, Math.max(best.get(a.questionId) ?? 0, a.score));
-    return best.size ? Math.round(([...best.values()].reduce((x, y) => x + y, 0) / best.size) * 10) / 10 : null;
-  }, [set.attempts]);
-  if (!q) return null;
-  return (
-    <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
-      <div className="space-y-1">
-        <div className="text-xs text-muted-foreground px-1 mb-1">
-          {set.questions.length} questions · {set.method === 'ai' ? 'AI' : 'rule-based'} · average best score {avg ?? '—'}
-        </div>
-        {set.questions.map((x, i) => {
-          const best = Math.max(-1, ...set.attempts.filter((a) => a.questionId === x.id).map((a) => a.score));
-          return (
-            <button key={x.id} type="button" onClick={() => setCurrent(x.id)} className={cn('w-full text-left rounded-lg border bg-background px-3 py-2 text-sm hover:border-primary/60', x.id === q.id && 'border-primary ring-1 ring-primary')}>
-              <div className="flex gap-2">
-                <span className="text-muted-foreground">{i + 1}.</span>
-                <span className="flex-1 line-clamp-2">{x.question}</span>
-                {best >= 0 && <span className="text-xs font-semibold tabular-nums">{best}</span>}
-              </div>
-              <div className="text-[11px] text-muted-foreground capitalize mt-0.5">{x.category}{x.skill ? ` · ${x.skill}` : ''}</div>
-            </button>
-          );
-        })}
-      </div>
-      <div className="space-y-3">
-        <div className="rounded-xl border bg-background p-4">
-          <div className="text-xs text-muted-foreground capitalize">{q.category}{q.skill ? ` · ${q.skill}` : ''}</div>
-          <h3 className="text-lg font-semibold mt-1">{q.question}</h3>
-          <p className="text-sm text-muted-foreground mt-1">{q.why}</p>
-          {q.idealPoints.length > 0 && (
-            <details className="mt-2 text-sm">
-              <summary className="cursor-pointer text-muted-foreground">What a strong answer covers</summary>
-              <ul className="list-disc pl-5 mt-1">{q.idealPoints.map((p) => <li key={p}>{p}</li>)}</ul>
-            </details>
-          )}
-          <Textarea className="mt-3" rows={7} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type your answer as you would say it — or use the microphone." />
-          <div className="mt-2 flex items-center gap-2">
-            <Button disabled={!answer.trim() || submit.isPending} onClick={() => submit.mutate()}>
-              {submit.isPending && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />} Get feedback
-            </Button>
-            {dictation && (
-              <Button variant="outline" onClick={() => (dictation.on ? dictation.stop() : dictation.start())}>
-                {dictation.on ? <MicOff className="w-4 h-4 mr-1.5" /> : <Mic className="w-4 h-4 mr-1.5" />} {dictation.on ? 'Stop' : 'Speak'}
-              </Button>
-            )}
-            <span className="text-xs text-muted-foreground ml-auto">{answer.trim() ? answer.trim().split(/\s+/).length : 0} words</span>
-          </div>
-        </div>
-        {[...attempts].reverse().map((a) => (
-          <div key={a.at}>
-            <p className="text-xs text-muted-foreground mb-1">Your answer: “{a.answer.slice(0, 300)}{a.answer.length > 300 ? '…' : ''}”</p>
-            <Feedback a={a} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export const Interview: React.FC = () => {
   const [params, setParams] = useSearchParams();
   const qc = useQueryClient();
-  const id = params.get('id');
+  const sessionId = params.get('session');
   const fromApp = params.get('applicationId');
-  const { data: sets = [] } = useQuery({ queryKey: ['interviews'], queryFn: career.interviews });
+  const { data } = useQuery({ queryKey: ['interview-sessions'], queryFn: career.interviewSessions });
   const { data: apps = [] } = useQuery({ queryKey: ['applications'], queryFn: career.applications });
-  const { data: set } = useQuery({ queryKey: ['interview', id], queryFn: () => career.interview(id!), enabled: !!id });
-  const [form, setForm] = useState({ applicationId: fromApp || '', role: '', company: '', jobDescription: '' });
+  const { data: open } = useQuery({ queryKey: ['interview-session', sessionId], queryFn: () => career.interviewSession(sessionId!), enabled: !!sessionId, staleTime: Infinity });
+  const [form, setForm] = useState({ mode: 'live' as 'live' | 'coach', applicationId: fromApp || '', role: '', company: '', jobDescription: '', count: 8 });
   useEffect(() => {
     if (fromApp) setForm((f) => ({ ...f, applicationId: fromApp }));
   }, [fromApp]);
   const candidates = apps.filter((a) => a.description && ((TRACKER_STAGES as string[]).includes(a.stage) || a.stage === 'ready'));
-  const create = useMutation({
-    mutationFn: () => career.createInterview(form.applicationId ? { applicationId: form.applicationId } : { role: form.role, company: form.company, jobDescription: form.jobDescription }),
+  const start = useMutation({
+    mutationFn: () =>
+      career.startInterview(
+        form.applicationId
+          ? { mode: form.mode, applicationId: form.applicationId, count: form.count }
+          : { mode: form.mode, role: form.role, company: form.company || undefined, jobDescription: form.jobDescription || undefined, count: form.count },
+      ),
     onSuccess: (s) => {
-      qc.invalidateQueries({ queryKey: ['interviews'] });
-      setParams({ id: s.id });
+      qc.setQueryData(['interview-session', s.id], s);
+      qc.invalidateQueries({ queryKey: ['interview-sessions'] });
+      setParams({ session: s.id });
     },
-    onError: (e) => toast({ title: 'Could not create questions', description: errMsg(e), variant: 'destructive' }),
+    onError: (e) => toast({ title: 'Could not start the interview', description: errMsg(e), variant: 'destructive' }),
   });
   const remove = useMutation({
-    mutationFn: (sid: string) => career.removeInterview(sid),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['interviews'] });
-      setParams({});
-    },
+    mutationFn: (id: string) => career.removeInterviewSession(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['interview-sessions'] }),
   });
+  const sessions = data?.sessions || [];
+
+  if (sessionId && open) {
+    return (
+      <AppShell
+        title="Interview Prep"
+        subtitle={open.mode === 'live' ? 'Live AI interview — the interviewer speaks, listens and follows up' : 'Coach mode — answer at your own pace and get suggestions'}
+        wide
+        actions={
+          <Button size="sm" variant="outline" onClick={() => setParams({})}>
+            ← All interviews
+          </Button>
+        }
+      >
+        <InterviewRoom key={open.id} initial={open} folderRoot={data?.folderRoot || ''} />
+      </AppShell>
+    );
+  }
 
   return (
-    <AppShell title="Interview Prep" subtitle="Likely questions for a specific job and your resume, with coaching" wide>
-      {!id || !set ? (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <section className="rounded-xl border bg-background p-4 space-y-3">
-            <h2 className="font-semibold">New practice set</h2>
-            <div>
-              <Label>For an application</Label>
-              <Select value={form.applicationId || 'none'} onValueChange={(v) => setForm({ ...form, applicationId: v === 'none' ? '' : v })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Enter a role instead —</SelectItem>
-                  {candidates.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.jobTitle} · {a.company}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {!form.applicationId && (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input placeholder="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} />
-                  <Input placeholder="Company (optional)" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+    <AppShell title="Interview Prep" subtitle="Practise like a real interview: questions from the job and your resume, follow-ups, hints and feedback" wide>
+      <div className="grid gap-5 lg:grid-cols-[1fr_24rem]">
+        <section className="rounded-xl border bg-background p-4 space-y-4">
+          <h2 className="font-semibold">Start an interview</h2>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {([
+              ['live', Mic, 'Live AI interview', 'The interviewer speaks each question, listens to you, detects when you are silent or unsure, asks connecting follow-ups and moves on when you are right.'],
+              ['coach', MessageSquareText, 'Coach mode', 'Answer by typing (or dictation) at your own pace. After every answer you get the analysis, suggestions and a stronger answer.'],
+            ] as const).map(([mode, Icon, title, text]) => (
+              <button key={mode} type="button" onClick={() => setForm({ ...form, mode })} className={cn('text-left rounded-lg border p-3 hover:border-primary/60', form.mode === mode && 'border-primary ring-1 ring-primary')}>
+                <div className="flex items-center gap-2 font-medium">
+                  <Icon className="w-4 h-4 text-primary" /> {title}
                 </div>
-                <Textarea rows={5} placeholder="Paste the job description (optional, makes questions specific)" value={form.jobDescription} onChange={(e) => setForm({ ...form, jobDescription: e.target.value })} />
-              </>
-            )}
-            <Button disabled={create.isPending || (!form.applicationId && !form.role.trim())} onClick={() => create.mutate()}>
-              {create.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Plus className="w-4 h-4 mr-1.5" />} Create questions
-            </Button>
-          </section>
-          <section className="space-y-2">
-            <h2 className="font-semibold">Your practice sets</h2>
-            {sets.length ? (
-              sets.map((s) => (
-                <div key={s.id} className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2">
-                  <button type="button" className="flex-1 text-left" onClick={() => setParams({ id: s.id })}>
-                    <div className="text-sm font-medium">{s.role || 'Interview'}{s.company ? ` · ${s.company}` : ''}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {s.questions.length} questions · {new Set(s.attempts.map((a) => a.questionId)).size} answered · {fmtDate(s.createdAt)}
-                    </div>
-                  </button>
-                  <Button size="icon" variant="ghost" aria-label="Delete set" onClick={() => remove.mutate(s.id)}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))
-            ) : (
-              <Empty icon={Mic} title="No practice sets yet">When an application reaches the Interview stage, create questions for it here.</Empty>
-            )}
-          </section>
-        </div>
-      ) : (
-        <>
-          <div className="mb-4 flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setParams({})}>
-              ← All sets
-            </Button>
-            <h2 className="font-semibold">
-              {set.role}
-              {set.company ? ` · ${set.company}` : ''}
-            </h2>
+                <p className="text-xs text-muted-foreground mt-1">{text}</p>
+              </button>
+            ))}
           </div>
-          <Practice set={set} />
-        </>
-      )}
+          <div>
+            <Label>For one of your applications</Label>
+            <Select value={form.applicationId || 'none'} onValueChange={(v) => setForm({ ...form, applicationId: v === 'none' ? '' : v })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Enter a role instead —</SelectItem>
+                {candidates.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.jobTitle} · {a.company}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {!form.applicationId && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Role *</Label>
+                  <Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="SOC Analyst" />
+                </div>
+                <div>
+                  <Label>Company (optional)</Label>
+                  <Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <Label>Job description (optional — makes questions specific)</Label>
+                <Textarea rows={5} value={form.jobDescription} onChange={(e) => setForm({ ...form, jobDescription: e.target.value })} />
+              </div>
+            </>
+          )}
+          <div className="flex items-end gap-3">
+            <div>
+              <Label>Questions</Label>
+              <Input type="number" min={3} max={20} className="w-24" value={form.count} onChange={(e) => setForm({ ...form, count: Math.max(3, Math.min(20, Number(e.target.value) || 8)) })} />
+            </div>
+            <Button className="flex-1" disabled={start.isPending || (!form.applicationId && !form.role.trim())} onClick={() => start.mutate()}>
+              {start.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Mic className="w-4 h-4 mr-1.5" />} Start {form.mode === 'live' ? 'live interview' : 'coached practice'}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">Questions are based on the job and your resume. Every interview is saved in its own folder named with the role, company, date and time — transcript, all questions and answers with feedback, and the job description.</p>
+        </section>
+
+        <section className="space-y-2">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="w-4 h-4 text-primary" />
+            <h2 className="font-semibold flex-1">Your interview folders</h2>
+          </div>
+          {data?.folderRoot && <p className="text-[11px] text-muted-foreground break-all">{data.folderRoot}</p>}
+          {sessions.length ? (
+            sessions.map((s) => (
+              <div key={s.id} className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2">
+                <button type="button" className="flex-1 text-left min-w-0" onClick={() => setParams({ session: s.id })}>
+                  <div className="text-sm font-medium truncate">📁 {s.folder}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {s.mode === 'live' ? 'Live' : 'Coach'} · {s.status === 'finished' ? `score ${s.summary?.overallScore ?? '—'}/10` : `question ${Math.min(s.current + 1, s.questions.length)}/${s.questions.length}`} · {fmtDate(s.updatedAt, true)}
+                  </div>
+                </button>
+                <Button size="icon" variant="ghost" aria-label="Remove from list" title="Remove from the list (the folder on disk is kept)" onClick={() => remove.mutate(s.id)}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))
+          ) : (
+            <Empty icon={Mic} title="No interviews yet">Start one on the left.</Empty>
+          )}
+        </section>
+      </div>
     </AppShell>
   );
 };

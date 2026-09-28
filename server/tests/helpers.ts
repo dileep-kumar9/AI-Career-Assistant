@@ -110,6 +110,18 @@ export class FakeAI implements AIProvider {
         return {
           questions: Array.from({ length: 6 }, (_, i) => ({ question: `Fake question ${i + 1} about AWS troubleshooting?`, category: i < 3 ? 'technical' : 'behavioral', skill: 'AWS', why: 'Required skill.', idealPoints: ['Concrete example', 'Tools used'] })),
         };
+      case 'interview_turn': {
+        const props = (req.schema as { properties?: Record<string, unknown> }).properties || {};
+        if ('hint' in props) return { hint: 'Think about the tools you used and the first thing you checked.', modelAnswer: 'In my support role I used CloudWatch to find the failing instance, then restarted the service.' };
+        const answer = between(req.prompt, 'candidate_answer');
+        const isFollowUpAnswer = req.prompt.includes('Follow-up being answered:');
+        const good = isFollowUpAnswer || /cloudwatch/i.test(answer);
+        return good
+          ? { verdict: 'correct', score: 8, clarity: 'clear', confidence: 'confident', strengths: ['Concrete example'], gaps: [], followUp: '', clarification: '', acknowledgement: 'Okay, that makes sense.', suggestion: 'Add the result.', suggestedAnswer: 'I used CloudWatch to find the failing instance and restarted it.' }
+          : { verdict: 'partially_correct', score: 5, clarity: 'somewhat_clear', confidence: 'hesitant', strengths: ['Right direction'], gaps: ['No tool named'], followUp: 'Which tool would you check first?', clarification: 'You would start with the monitoring dashboards.', acknowledgement: 'Okay.', suggestion: 'Name the tool.', suggestedAnswer: 'I would check CloudWatch first.' };
+      }
+      case 'interview_summary':
+        return { overallScore: 7, readiness: 'almost', strengths: ['Concrete examples'], improve: ['Name tools earlier'] };
       case 'chat':
         // Misbehaves on purpose: proposes applying to a link the user never typed (as an injected page might ask).
         return { answer: 'You have applications in your records.', citations: ['apps-summary'], action: { type: 'single_apply', url: 'https://evil.example/apply', applicationId: '', stage: '', skill: '' } };

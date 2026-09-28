@@ -3,7 +3,7 @@ import type { AppConfig } from '../config.js';
 import { AIUnavailableError } from '../errors.js';
 import { logger } from '../logger.js';
 
-export type AITask = 'parse' | 'jd' | 'generate' | 'edit' | 'semantic' | 'entry' | 'profile' | 'answer' | 'cover' | 'email' | 'interview' | 'evaluate' | 'learning' | 'chat';
+export type AITask = 'parse' | 'jd' | 'generate' | 'edit' | 'semantic' | 'entry' | 'profile' | 'answer' | 'cover' | 'email' | 'interview' | 'evaluate' | 'learning' | 'chat' | 'interview_turn' | 'interview_summary';
 
 export interface AIJsonRequest {
   task: AITask;

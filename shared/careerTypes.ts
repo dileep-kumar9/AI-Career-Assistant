@@ -248,6 +248,85 @@ export interface InterviewSet {
   updatedAt: string;
 }
 
+// ------------------------------------------------------------------ live / coached interview sessions
+
+export type AnswerVerdict = 'correct' | 'partially_correct' | 'incorrect' | 'unclear' | 'no_answer';
+
+/** How an answer was delivered (from the browser's speech detection, or typing). */
+export interface AnswerMetrics {
+  source: 'voice' | 'text';
+  /** Seconds from the end of the question until the candidate started answering. */
+  secondsToStart: number | null;
+  /** Seconds spent answering. */
+  durationSec: number | null;
+  /** Pauses longer than ~2 s while answering. */
+  longPauses: number;
+  /** The microphone heard speech at all. */
+  speechDetected: boolean;
+}
+
+export interface AnswerAnalysis {
+  verdict: AnswerVerdict;
+  score: number;
+  clarity: 'clear' | 'somewhat_clear' | 'unclear';
+  confidence: 'confident' | 'hesitant' | 'unsure';
+  /** Observable delivery signals: filler words, hedging, long pauses, very short answer. */
+  deliverySignals: string[];
+  strengths: string[];
+  gaps: string[];
+  /** Concrete advice on how to answer this better. */
+  suggestion: string;
+  /** A stronger answer built only from the candidate's resume and what they said. */
+  suggestedAnswer: string;
+  method: 'ai' | 'rule-based';
+}
+
+export type InterviewTurnKind = 'intro' | 'question' | 'followup' | 'hint' | 'model_answer' | 'feedback' | 'clarification' | 'answer' | 'closing';
+
+export interface InterviewTurn {
+  id: string;
+  at: string;
+  speaker: 'ai' | 'user';
+  kind: InterviewTurnKind;
+  text: string;
+  /** Index into the question plan this turn belongs to. */
+  questionIndex: number;
+  analysis?: AnswerAnalysis;
+  metrics?: AnswerMetrics;
+}
+
+export interface InterviewSummary {
+  overallScore: number;
+  readiness: 'ready' | 'almost' | 'needs_practice';
+  strengths: string[];
+  improve: string[];
+  perQuestion: Array<{ question: string; score: number | null; verdict: AnswerVerdict }>;
+  method: 'ai' | 'rule-based';
+}
+
+export interface InterviewSession {
+  id: string;
+  /** live = AI speaks and listens with automatic turn-taking; coach = answer at your own pace with suggestions. */
+  mode: 'live' | 'coach';
+  applicationId: string | null;
+  role: string;
+  company: string;
+  hasJobDescription: boolean;
+  questions: InterviewQuestion[];
+  /** Question currently being asked (== questions.length when finished). */
+  current: number;
+  /** State of the current question: follow-ups asked so far, whether a hint was given, the question text now awaiting an answer. */
+  pending: { followUps: number; hintGiven: boolean; asking: string };
+  turns: InterviewTurn[];
+  status: 'active' | 'finished';
+  summary: InterviewSummary | null;
+  /** Folder on this computer where the transcript and Q&A are saved, e.g. data/interviews/SOC Analyst - Acme - 2026-09-27 22-15. */
+  folder: string;
+  method: 'ai' | 'rule-based';
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ------------------------------------------------------------------ skills & learning
 
 export interface SkillGapRow {

@@ -4,6 +4,7 @@ import { ApplicationService } from './applications.js';
 import { AgentService } from './agent.js';
 import { TrackerService } from './tracker.js';
 import { InterviewService } from './interview.js';
+import { InterviewSessionService } from './interviewSession.js';
 import { SkillsService } from './skills.js';
 import { RagService } from './rag.js';
 import { AssistantService } from './assistant.js';
@@ -17,6 +18,7 @@ export interface CareerModules {
   agent: AgentService;
   tracker: TrackerService;
   interviews: InterviewService;
+  sessions: InterviewSessionService;
   skills: SkillsService;
   rag: RagService;
   assistant: AssistantService;
@@ -29,8 +31,9 @@ export function createCareer(ctx: CareerContext, browser = new BrowserManager(ct
   const agent = new AgentService(ctx, apps, profiles, browser);
   const tracker = new TrackerService(ctx, apps, profiles);
   const interviews = new InterviewService(ctx, apps);
+  const sessions = new InterviewSessionService(ctx, interviews);
   const skills = new SkillsService(ctx, apps, agent, profiles);
-  const rag = new RagService(ctx, { profiles, apps, interviews, skills, agent });
-  const assistant = new AssistantService(ctx, rag, { apps, agent, interviews, skills });
-  return { ctx, browser, profiles, apps, agent, tracker, interviews, skills, rag, assistant };
+  const rag = new RagService(ctx, { profiles, apps, interviews, sessions, skills, agent });
+  const assistant = new AssistantService(ctx, rag, { apps, agent, sessions, skills });
+  return { ctx, browser, profiles, apps, agent, tracker, interviews, sessions, skills, rag, assistant };
 }

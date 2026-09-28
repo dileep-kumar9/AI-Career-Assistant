@@ -7,7 +7,7 @@ import { badRequest } from '../errors.js';
 import { type CareerContext, now } from './context.js';
 import type { ApplicationService } from './applications.js';
 import type { AgentService } from './agent.js';
-import type { InterviewService } from './interview.js';
+import type { InterviewSessionService } from './interviewSession.js';
 import type { SkillsService } from './skills.js';
 import type { Chunk, RagService } from './rag.js';
 
@@ -77,7 +77,7 @@ export class AssistantService {
   constructor(
     private ctx: CareerContext,
     private rag: RagService,
-    private deps: { apps: ApplicationService; agent: AgentService; interviews: InterviewService; skills: SkillsService },
+    private deps: { apps: ApplicationService; agent: AgentService; sessions: InterviewSessionService; skills: SkillsService },
   ) {}
 
   /** Validates a proposed action against your data; null when it is not acceptable. */
@@ -194,8 +194,8 @@ export class AssistantService {
         return { message: `Moved ${app.jobTitle} at ${app.company} to ${STAGE_LABELS[app.stage]}.`, navigate: `/tracker?id=${app.id}` };
       }
       case 'interview_prep': {
-        const set = await this.deps.interviews.create(owner, { applicationId: a.applicationId!, count: 15 });
-        return { message: `Created ${set.questions.length} practice questions.`, navigate: `/interview?id=${set.id}` };
+        const session = await this.deps.sessions.start(owner, { mode: 'coach', applicationId: a.applicationId!, count: 8 });
+        return { message: `Started a coached interview with ${session.questions.length} questions.`, navigate: `/interview?session=${session.id}` };
       }
       case 'learning_plan': {
         const plan = await this.deps.skills.createPlan(owner, { skill: a.skill! });

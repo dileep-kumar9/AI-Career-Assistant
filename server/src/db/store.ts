@@ -54,7 +54,7 @@ export type VersionMeta = Omit<VersionRow, 'resume' | 'ats'>;
  * (profiles, applications, agent runs, interviews, learning plans, RAG).
  * Firestore: collection "<prefix><name>"; SQL: one aca_docs table.
  */
-export const DOC_COLLECTIONS = ['profiles', 'job_applications', 'agent_settings', 'agent_runs', 'jobs_seen', 'interviews', 'learning', 'kb_chunks'] as const;
+export const DOC_COLLECTIONS = ['profiles', 'job_applications', 'agent_settings', 'agent_runs', 'jobs_seen', 'interviews', 'interview_sessions', 'learning', 'kb_chunks'] as const;
 export type DocCollection = (typeof DOC_COLLECTIONS)[number];
 
 export interface DocBase {

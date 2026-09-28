@@ -9,6 +9,7 @@ import type { CareerModules } from './index.js';
 import { ProfileInput, SavedAnswerInput } from './profile.js';
 import { AgentSettingsInput } from './agentSettings.js';
 import { CreateSetInput } from './interview.js';
+import { RespondInput, StartInput } from './interviewSession.js';
 import { ConfirmInput, PlanInput, PlanUpdate } from './skills.js';
 import { ActionInput, ChatInput } from './assistant.js';
 
@@ -117,6 +118,25 @@ export function careerRoutes(m: CareerModules, config: AppConfig): Router {
   r.post('/interviews/:id/answer', ai, wrap(async (req, res) => {
     const b = body(z.object({ questionId: z.string().max(80), answer: z.string().max(8000) }), req);
     res.json(await m.interviews.answer(ownerOf(req), req.params.id, b.questionId, b.answer));
+  }));
+
+  // ---------------------------------------------------------------- live / coached interview sessions
+  r.get('/interview-sessions', wrap(async (req, res) => res.json({ sessions: await m.sessions.list(ownerOf(req)), folderRoot: m.sessions.folderPath('') })));
+  r.post('/interview-sessions', ai, wrap(async (req, res) => res.status(201).json(await m.sessions.start(ownerOf(req), body(StartInput, req)))));
+  r.get('/interview-sessions/:id', wrap(async (req, res) => res.json(await m.sessions.get(ownerOf(req), req.params.id))));
+  r.delete('/interview-sessions/:id', wrap(async (req, res) => {
+    await m.sessions.remove(ownerOf(req), req.params.id);
+    res.status(204).end();
+  }));
+  r.post('/interview-sessions/:id/respond', ai, wrap(async (req, res) => res.json(await m.sessions.respond(ownerOf(req), req.params.id, body(RespondInput, req)))));
+  r.post('/interview-sessions/:id/hint', ai, wrap(async (req, res) => res.json(await m.sessions.hint(ownerOf(req), req.params.id))));
+  r.post('/interview-sessions/:id/skip', ai, wrap(async (req, res) => res.json(await m.sessions.skip(ownerOf(req), req.params.id))));
+  r.post('/interview-sessions/:id/finish', ai, wrap(async (req, res) => res.json(await m.sessions.finish(ownerOf(req), req.params.id))));
+  r.get('/interview-sessions/:id/transcript.md', wrap(async (req, res) => {
+    const t = await m.sessions.transcript(ownerOf(req), req.params.id);
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(t.filename)}"`);
+    res.send(t.markdown);
   }));
 
   // ---------------------------------------------------------------- skills & learning

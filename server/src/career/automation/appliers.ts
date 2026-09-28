@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { BrowserContext, Frame, Page } from 'playwright-core';
+import type { BrowserContext, Frame, Locator, Page } from 'playwright-core';
 import type { ApplicationAnswer, JobSourceId, PendingQuestion } from '../../../../shared/careerTypes.js';
 import { assertPublicUrl } from '../../services/fetchJob.js';
 import { siteOf } from '../jobs/readers.js';
@@ -310,27 +310,111 @@ async function linkedinResumeStep(page: Page, deps: ApplyDeps, uploaded: { done:
 /** Resume pickers (radio lists of file names) are handled by linkedinResumeStep, not by the question filler. */
 const isResumePicker = (f: FieldInfo) => (f.kind === 'radio' || f.kind === 'file') && (/\bresume|\bcv\b/i.test(f.label) || f.options.some((o) => /\.(pdf|docx?)\b/i.test(o)));
 
+/**
+ * The job's own apply control (not the ones on other jobs in a list): "Easy Apply",
+ * or "Apply" / "Apply on company website" (offsite). LinkedIn renders duplicates
+ * (sticky header, hidden copies), so only visible ones count. The chosen element is
+ * marked data-aca-apply="1".
+ */
+async function linkedinApplyButton(page: Page): Promise<{ kind: 'easy' | 'offsite' | 'none'; href: string | null }> {
+  // The job view can render a moment after load.
+  await page.locator('.jobs-apply-button, button[aria-label*="Apply" i], a[aria-label*="Apply" i]').first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => undefined);
+  return page.evaluate(() => {
+    const visible = (el: Element) => {
+      const r = (el as HTMLElement).getBoundingClientRect();
+      const s = getComputedStyle(el as HTMLElement);
+      return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
+    };
+    const label = (el: Element) => `${(el as HTMLElement).innerText || ''} ${el.getAttribute('aria-label') || ''}`.replace(/\s+/g, ' ').trim();
+    // Controls inside the job list / similar-jobs cards belong to other jobs.
+    const inOtherJob = (el: Element) => !!el.closest('.jobs-search-results-list, .scaffold-layout__list, .job-card-container, .jobs-similar-jobs');
+    const all = [...document.querySelectorAll('button, a')].filter((el) => visible(el) && !inOtherJob(el));
+    const easy = all.find((el) => /easy apply/i.test(label(el)));
+    if (easy) {
+      easy.setAttribute('data-aca-apply', '1');
+      return { kind: 'easy' as const, href: null };
+    }
+    const offsite = all.find((el) => {
+      const text = label(el);
+      if (/save|share|alert|similar|premium/i.test(text)) return false;
+      return el.classList.contains('jobs-apply-button') || /^apply\b/i.test(((el as HTMLElement).innerText || '').trim()) || /apply.*(company|website)|^apply to /i.test(el.getAttribute('aria-label') || '') || /externalApply/.test(el.getAttribute('href') || '');
+    });
+    if (offsite) {
+      offsite.setAttribute('data-aca-apply', '1');
+      const href = offsite.getAttribute('href');
+      return { kind: 'offsite' as const, href: href && /^https?:/.test(href) ? href : null };
+    }
+    return { kind: 'none' as const, href: null };
+  });
+}
+
+/** Job-site hosts: an "apply on company site" link that still points here has not left the portal yet. */
+const PORTAL_HOSTS = { linkedin: /(^|\.)linkedin\.com$/i, naukri: /(^|\.)naukri\.com$/i, indeed: /(^|\.)indeed\.[a-z.]+$/i };
+
+/**
+ * Presses a portal's "Apply on company site" button and returns the company
+ * application URL. The company page opens in a new tab (starting at
+ * about:blank and passing through the portal's redirect), in the same tab, or
+ * after a "Continue" dialog. Returns null when it never left the portal.
+ */
+async function followOffsite(page: Page, ctx: BrowserContext, button: Locator, portal: RegExp, href: string | null = null): Promise<string | null> {
+  const off = (u: string) => {
+    try {
+      return /^https?:/.test(u) && !portal.test(new URL(u).hostname);
+    } catch {
+      return false;
+    }
+  };
+  const popup = ctx.waitForEvent('page', { timeout: 12_000 }).catch(() => null);
+  await button.click().catch(() => undefined);
+  const dialog = page.locator('[role="dialog"] button:has-text("Continue"), [role="dialog"] a:has-text("Continue"), [role="dialog"] button:has-text("Apply"), [role="dialog"] a:has-text("Apply")').filter({ visible: true }).first();
+  if (await dialog.isVisible({ timeout: 2500 }).catch(() => false)) await dialog.click().catch(() => undefined);
+  const p2 = await popup;
+  let url = '';
+  if (p2) {
+    await p2.waitForURL((u) => off(u.toString()), { timeout: 20_000 }).catch(() => undefined);
+    url = p2.url();
+    await p2.close().catch(() => undefined);
+  } else {
+    await page.waitForURL((u) => off(u.toString()), { timeout: 8000 }).catch(() => undefined);
+    url = page.url();
+  }
+  if (off(url)) return url;
+  // The button's own link, or the company URL inside the portal's redirect link.
+  href ||= await button.getAttribute('href').catch(() => null);
+  if (href) {
+    try {
+      const abs = new URL(href, page.url()).toString();
+      if (off(abs)) return abs;
+      const target = new URL(abs).searchParams.get('url') || new URL(abs).searchParams.get('redirect');
+      if (target && off(target)) return target;
+    } catch {
+      /* not a URL */
+    }
+  }
+  return null;
+}
+
 async function linkedin(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: BrowserContext): Promise<ApplyOutcome> {
   await waitSettled(page, 2500);
   const signedIn = await page.locator('.global-nav__me, [data-control-name="nav.settings"], img.global-nav__me-photo').first().isVisible().catch(() => false);
   if (/\/(login|authwall|checkpoint|uas\/login)/.test(page.url()) || (!signedIn && (await page.locator('a:has-text("Sign in"), button:has-text("Sign in")').first().isVisible().catch(() => false)))) {
     return attention('You are not logged in to LinkedIn in the automation browser. Settings → Automation browser → Open LinkedIn, log in once, then retry.');
   }
-  const easy = page.locator('button.jobs-apply-button:has-text("Easy Apply"), button[aria-label*="Easy Apply"]').first();
-  if (!(await easy.isVisible().catch(() => false))) {
+  const button = await linkedinApplyButton(page);
+  if (button.kind !== 'easy') {
     const applied = await page.locator('text=/Applied \\d|Application submitted|You applied/i').first().isVisible().catch(() => false);
     if (applied) return { status: 'submitted', reason: 'LinkedIn shows this job as already applied.', answers: [], keepOpen: false };
-    const external = page.locator('button.jobs-apply-button, a.jobs-apply-button, button:has-text("Apply")').first();
-    if (await external.isVisible().catch(() => false)) {
-      const popup = ctx.waitForEvent('page', { timeout: 10_000 }).catch(() => null);
-      await external.click().catch(() => undefined);
-      const p2 = await popup;
-      const url = p2 ? p2.url() : page.url();
-      if (p2) await p2.close().catch(() => undefined);
-      if (url && !/linkedin\.com/.test(url)) return { status: 'needs_attention', reason: 'Applies on the company site.', answers: [], redirectUrl: url, keepOpen: false };
+    if (button.kind === 'offsite') {
+      deps.log('This LinkedIn job applies on the company website: following its Apply button.');
+      const url = await followOffsite(page, ctx, page.locator('[data-aca-apply="1"]'), PORTAL_HOSTS.linkedin, button.href);
+      if (url) return { status: 'needs_attention', reason: 'Applies on the company site.', answers: [], redirectUrl: url, keepOpen: false };
+      return attention('LinkedIn’s Apply button did not open the company’s application page. It is open for you to check.');
     }
-    return attention('This LinkedIn job has no Easy Apply button (it may be closed). It is open for you to check.');
+    const closed = await page.locator('text=/No longer accepting applications/i').first().isVisible().catch(() => false);
+    return attention(closed ? 'This LinkedIn job is no longer accepting applications.' : 'No Apply button was found on this LinkedIn job. It is open for you to check.');
   }
+  const easy = page.locator('[data-aca-apply="1"]');
   await easy.click();
   deps.log('Opened LinkedIn Easy Apply.');
   await page.waitForSelector(LI_DIALOG, { timeout: 15_000 }).catch(() => undefined);
@@ -388,14 +472,11 @@ async function naukri(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: Browser
   if (/nlogin|login\.naukri/.test(page.url())) return attention('You are not logged in to Naukri in the automation browser. Settings → Automation browser → Open Naukri, log in once, then retry.');
   const already = await page.locator('button:has-text("Applied"), span:has-text("Applied")').first().isVisible().catch(() => false);
   if (already) return { status: 'submitted', reason: 'Naukri shows this job as already applied.', answers: [], keepOpen: false };
-  const companySite = page.locator('#company-site-button, button:has-text("Apply on company site")').first();
+  const companySite = page.locator('#company-site-button, button:has-text("Apply on company site"), a:has-text("Apply on company site"), button:has-text("Apply on company website"), a:has-text("Apply on company website")').filter({ visible: true }).first();
   if (await companySite.isVisible().catch(() => false)) {
-    const popup = ctx.waitForEvent('page', { timeout: 10_000 }).catch(() => null);
-    await companySite.click().catch(() => undefined);
-    const p2 = await popup;
-    const url = p2?.url() || '';
-    if (p2) await p2.close().catch(() => undefined);
-    return url && !/naukri\.com/.test(url) ? { status: 'needs_attention', reason: 'Applies on the company site.', answers: [], redirectUrl: url, keepOpen: false } : attention('This job applies on the company site. It is open for you.');
+    deps.log('This Naukri job applies on the company website: following its button.');
+    const url = await followOffsite(page, ctx, companySite, PORTAL_HOSTS.naukri);
+    return url ? { status: 'needs_attention', reason: 'Applies on the company site.', answers: [], redirectUrl: url, keepOpen: false } : attention('Naukri’s “Apply on company site” did not open the company’s application page. It is open for you.');
   }
   const loginToApply = await page.locator('button:has-text("Login to apply"), a:has-text("Login to apply")').first().isVisible().catch(() => false);
   if (loginToApply) return attention('Naukri says “Login to apply”. Log in to Naukri in the automation browser (Settings), then retry.');
@@ -438,16 +519,17 @@ async function naukri(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: Browser
 async function indeed(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: BrowserContext): Promise<ApplyOutcome> {
   await waitSettled(page, 2000);
   if (await captchaVisible(page)) return attention('Indeed is showing a “verify you are human” check. Solve it in the open tab, then retry.');
-  const applyBtn = page.locator('#indeedApplyButton, button:has-text("Apply now"), button[aria-label*="Apply now"]').first();
+  const applyBtn = page.locator('#indeedApplyButton, button:has-text("Apply now"), button[aria-label*="Apply now"]').filter({ visible: true }).first();
   if (!(await applyBtn.isVisible().catch(() => false))) {
-    const ext = page.locator('button:has-text("Apply on company site"), a:has-text("Apply on company site")').first();
+    const ext = page
+      .locator('button:has-text("Apply on company site"), a:has-text("Apply on company site"), button:has-text("Apply on company website"), a:has-text("Apply on company website"), [aria-label*="company site" i], #applyButtonLinkContainer a, #applyButtonLinkContainer button')
+      .filter({ visible: true })
+      .first();
     if (await ext.isVisible().catch(() => false)) {
-      const popup = ctx.waitForEvent('page', { timeout: 10_000 }).catch(() => null);
-      await ext.click().catch(() => undefined);
-      const p2 = await popup;
-      const url = p2?.url() || '';
-      if (p2) await p2.close().catch(() => undefined);
-      if (url && !/indeed\./.test(url)) return { status: 'needs_attention', reason: 'Applies on the company site.', answers: [], redirectUrl: url, keepOpen: false };
+      deps.log('This Indeed job applies on the company website: following its button.');
+      const url = await followOffsite(page, ctx, ext, PORTAL_HOSTS.indeed);
+      if (url) return { status: 'needs_attention', reason: 'Applies on the company site.', answers: [], redirectUrl: url, keepOpen: false };
+      return attention('Indeed’s “Apply on company site” did not open the company’s application page. It is open for you.');
     }
     return attention('No “Apply now” button found on Indeed. The job is open for you.');
   }

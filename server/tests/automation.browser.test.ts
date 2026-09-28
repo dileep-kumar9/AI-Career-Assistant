@@ -175,6 +175,33 @@ describe('form filler + appliers (real Chrome, local fixtures)', () => {
     void ctx;
   }, 120_000);
 
+  it('LinkedIn "apply on company website": ignores other jobs’ Easy Apply, follows Apply to the company form and fills it', async (t) => {
+    if (!chromeOk) return t.skip();
+    const logs: string[] = [];
+    let last: import('playwright-core').Page | null = null;
+    const out = await browser.exclusive((c) => runApplier(c, task('linkedin-offsite.html', false), { engine: engine(), files: { resume: resumePdf, cover: async () => null }, log: (m) => logs.push(m), allowPrivateHosts: true, forceKind: 'linkedin', onPage: (p) => (last = p) }));
+    expect(logs.join(' ')).toMatch(/applies on the company website/);
+    expect(logs.join(' ')).toMatch(/This job applies on another site/);
+    expect(out.status).toBe('filled'); // the company form (greenhouse-like) was filled, fill-only
+    expect(last!.url()).toMatch(/greenhouse-like\.html$/);
+    expect(await last!.inputValue('#email')).toBe('asha@example.com');
+    await last!.close();
+  }, 120_000);
+
+  for (const site of ['naukri', 'indeed'] as const) {
+    it(`${site} "apply on company site": follows the button to the company form and fills it`, async (t) => {
+      if (!chromeOk) return t.skip();
+      const logs: string[] = [];
+      let last: import('playwright-core').Page | null = null;
+      const out = await browser.exclusive((c) => runApplier(c, task(`${site}-offsite.html`, false), { engine: engine(), files: { resume: resumePdf, cover: async () => null }, log: (m) => logs.push(m), allowPrivateHosts: true, forceKind: site, onPage: (p) => (last = p) }));
+      expect(logs.join(' ')).toMatch(/applies on the company website/);
+      expect(out.status).toBe('filled');
+      expect(last!.url()).toMatch(/greenhouse-like\.html$/);
+      expect(await last!.inputValue('#email')).toBe('asha@example.com');
+      await last!.close();
+    }, 120_000);
+  }
+
   it('Google Forms: fills ARIA radios, dropdowns and checkboxes over two pages, and pauses to review a remembered answer', async (t) => {
     if (!chromeOk) return t.skip();
     const eng = engine({ willingToRelocate: null });

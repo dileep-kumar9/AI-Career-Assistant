@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Junior Python Developer | Astika (fixture)</title>
+<style>.hidden{display:none}</style></head>
+<body>
+  <!-- Test fixture shaped like a LinkedIn job that applies on the company website ("offsite").
+       The job list on the left shows OTHER jobs, one of them with Easy Apply: it must be ignored. -->
+  <img class="global-nav__me-photo" alt="me" width="10" height="10">
+  <div class="scaffold-layout__list">
+    <div class="job-card-container"><a href="#">Python Full Stack Developer</a> <button>Easy Apply</button></div>
+  </div>
+  <main class="jobs-details">
+    <h1>Junior Python Developer</h1>
+    <!-- a hidden sticky-header copy, then the real button -->
+    <button class="jobs-apply-button hidden" aria-label="Apply to Junior Python Developer on company website">Apply</button>
+    <button class="jobs-save-button">Save</button>
+    <button id="apply" class="jobs-apply-button" aria-label="Apply to Junior Python Developer on company website" onclick="offsite()">Apply</button>
+  </main>
+  <script>
+    // Like LinkedIn: a new tab opens at about:blank, then goes to the company's application form.
+    function offsite() {
+      const w = window.open('about:blank', '_blank');
+      setTimeout(() => { w.location.href = location.origin + '/greenhouse-like.html'; }, 400);
+    }
+  </script>
+</body>
+</html>

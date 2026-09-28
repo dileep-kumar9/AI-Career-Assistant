@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Python Developer (indeed fixture)</title></head>
+<body>
+  <!-- Test fixture shaped like a indeed job that applies on the company website. Nothing is sent anywhere. -->
+  <h1>Python Developer</h1>
+  <div id="applyButtonLinkContainer"><button aria-label="Apply on company site (opens in a new tab)">Apply on company site</button></div>
+  <script>
+    // Like the portal: a new tab opens at about:blank, then goes to the company's application form.
+    document.querySelector('button').addEventListener('click', () => {
+      const w = window.open('about:blank', '_blank');
+      setTimeout(() => { w.location.href = location.origin + '/greenhouse-like.html'; }, 400);
+    });
+  </script>
+</body>
+</html>

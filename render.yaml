@@ -1,0 +1,48 @@
+# Render blueprint: one web service serves the web app and the API.
+# Render has no desktop browser for your logins, so applying, login-only job
+# pages and the job agent are queued for `npm run runner` on your computer.
+# Data lives in Firestore (collections prefixed aca_), not on Render's disk.
+services:
+  - type: web
+    name: ai-career-assistant
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build && npm run sitemap
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        value: firestore
+      - key: FIRESTORE_PREFIX
+        value: aca_
+      # Secrets: filled in on the Render dashboard (never committed).
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Search engines: your public URL (defaults to the service's onrender.com URL).
+      - key: SITE_URL
+        sync: false

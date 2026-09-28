@@ -2,7 +2,7 @@
 
 Tailor your resume to every job, apply from a single link or let an agent search and apply for you, then track applications, prepare for interviews and close skill gaps — **using only your real experience**.
 
-It runs on your own computer (the job automation drives a real Chrome window with your logins) — or hosted on **Vercel** with a small **runner** on your computer doing the browser work — stores data in your Firebase project (Firestore collections prefixed `aca_`) or a local SQLite file, and works with free AI keys (Gemini / Groq / Mistral, optional Claude) — or with no AI at all, using clearly labelled rule-based fallbacks.
+It runs on your own computer (the job automation drives a real Chrome window with your logins) — or hosted on **Render** or **Vercel** with a small **runner** on your computer doing the browser work — stores data in your Firebase project (Firestore collections prefixed `aca_`) or a local SQLite file, and works with free AI keys (Gemini / Groq / Mistral, optional Claude) — or with no AI at all, using clearly labelled rule-based fallbacks.
 
 > Design and decisions: [docs/DESIGN.md](docs/DESIGN.md) · Resume engine details: [docs/RESUME_ENGINE.md](docs/RESUME_ENGINE.md)
 > The resume engine is a copy of **resume-creator-ai**; that project is not modified by this app.
@@ -97,6 +97,17 @@ Open **http://localhost:8081** (use `localhost`, not 127.0.0.1 — Firebase sign
 
 ---
 
+## Deploy to Render (hosted app + runner on your computer)
+
+One Render **web service** serves the web app and the API (`render.yaml`). Data stays in **Firestore** (Render’s free PostgreSQL expires after 30 days). Render has no desktop browser with your logins, so — exactly as with Vercel below — applying, login-only pages and the job agent are queued for `npm run runner` on your computer.
+
+1. Render → **New → Blueprint** → this repo (or, for an existing service: Build command `npm ci --include=dev && npm run build && npm run sitemap`, Start command `npm start`, Health check `/api/health`, env `NODE_VERSION=24`, `HOST=0.0.0.0`).
+2. Fill in the secret env vars listed in `render.yaml` (Firebase, `VITE_FIREBASE_*`, AI keys). `SITE_URL` defaults to the service’s onrender.com URL.
+3. Firebase → Authentication → Authorized domains → add the onrender.com domain.
+4. Runner on your computer: see step 4 of the Vercel section.
+
+Free Render services sleep after ~15 minutes without visits (the first request then takes about a minute); the runner keeps working on your computer meanwhile.
+
 ## Deploy to Vercel (hosted app + runner on your computer)
 
 Vercel serves the web app and the API as a serverless function (`api/index.js` → `server/src/vercel.ts`). Serverless functions have no browser and no lasting disk, so:
@@ -116,8 +127,8 @@ Work that needs the browser is **queued**; the Agent page shows whether your run
 
 `npm run sitemap` (run by the Vercel build) writes into `dist/`: an indexable **landing page** (title, description, canonical URL, Open Graph, JSON-LD `WebApplication`, a static copy of the landing text for crawlers), `app.html` for every app page (**noindex**: your data is never indexed), `robots.txt` and `sitemap.xml`.
 
-- Site URL: `SITE_URL` (e.g. `https://your-domain.com`); on Vercel the production domain is used automatically. Without one, `robots.txt` disallows everything.
-- **Google Search Console** → add your site → *HTML tag* method → put the `content` value in `GOOGLE_SITE_VERIFICATION` → redeploy → *Verify* → *Sitemaps* → submit `sitemap.xml`. Searching for the app name finds it once Google has crawled it (usually a few days).
+- Site URL: `SITE_URL` (e.g. `https://your-domain.com`); on Render / Vercel the service’s own domain is used automatically. Without one, `robots.txt` disallows everything.
+- **Google Search Console**: this site’s verification is already included (the HTML tag in the landing page and `public/googlec62117fecf58bc04.html`); for another property set `GOOGLE_SITE_VERIFICATION`. Deploy → *Verify* → *Sitemaps* → submit `sitemap.xml`. Searching for the app name finds it once Google has crawled it (usually a few days).
 
 ---
 

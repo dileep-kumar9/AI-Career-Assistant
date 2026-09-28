@@ -7,6 +7,7 @@ import { createAIChain } from './ai/provider.js';
 import { createApp } from './app.js';
 import { logger } from './logger.js';
 import { Runner } from './career/runner.js';
+import { RemoteBrowser } from './career/automation/browser.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,13 +26,14 @@ async function main() {
   const ai = createAIChain(config.ai);
   // dist/ lives at the project root; this file runs from server/src (tsx) or build/server/src (compiled).
   const staticDir = [path.resolve(here, '../../dist'), path.resolve(here, '../../../dist')].find((p) => fs.existsSync(path.join(p, 'index.html')));
-  const { app, service, career } = await createApp({ config, store, ai, staticDir: process.env.STATIC_DIR || staticDir });
+  const { app, service, career } = await createApp({ config, store, ai, staticDir: process.env.STATIC_DIR || staticDir, browser: config.serverless ? new RemoteBrowser(config.automation) : undefined });
 
   const server = app.listen(config.port, config.host, () => {
     logger.info('server.started', { host: config.host, port: config.port, owner: config.localOwner ? 'single-user local mode' : 'firebase accounts', db: store.kind, ai: ai.names.length ? ai.names : 'none (rule-based fallbacks only)' });
   });
 
-  await career.agent.init();
+  // Hosted (Render): the runner on your computer schedules the agent instead.
+  if (!config.serverless) await career.agent.init();
   const runner = config.runner.enabled ? new Runner(career) : null;
   runner?.start();
 

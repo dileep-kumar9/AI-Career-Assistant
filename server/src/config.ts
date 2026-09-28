@@ -72,7 +72,8 @@ function parseWeights(raw: string | undefined): AtsWeights {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const serverless = !!env.VERCEL || env.ACA_SERVERLESS === 'true';
+  // Hosted without a browser: Vercel, Render (sets RENDER=true) or ACA_HOSTED=true.
+  const serverless = !!env.VERCEL || env.RENDER === 'true' || env.ACA_HOSTED === 'true';
   // Only /tmp is writable on serverless hosts (and it does not last).
   const dataDir = path.resolve(env.DATA_DIR || (serverless ? '/tmp/aca-data' : './data'));
   const host = (env.HOST || '127.0.0.1').trim();
@@ -96,7 +97,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       general: Number(env.RATE_LIMIT_GENERAL || 300),
       ai: Number(env.RATE_LIMIT_AI || 20),
     },
-    trustProxy: env.TRUST_PROXY === 'true' || !!env.VERCEL,
+    trustProxy: env.TRUST_PROXY === 'true' || !!env.VERCEL || env.RENDER === 'true',
     firebase: {
       // Trimmed and unquoted: values pasted into hosting dashboards often carry stray spaces or newlines.
       projectId: (env.FIREBASE_PROJECT_ID || '').trim().replace(/^"|"$/g, ''),

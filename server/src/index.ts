@@ -6,11 +6,17 @@ import { createStore } from './db/store.js';
 import { createAIChain } from './ai/provider.js';
 import { createApp } from './app.js';
 import { logger } from './logger.js';
+import { Runner } from './career/runner.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
+  // npm run runner: this computer does the browser work for the hosted (Vercel) app.
+  if (process.argv.includes('--runner')) process.env.ACA_RUNNER = 'true';
   const config = loadConfig();
+  if (config.runner.enabled && (!config.firebase.projectId || !/^(firestore|postgres)/i.test(config.databaseUrl))) {
+    throw new Error('The runner shares data with the hosted app: set DATABASE_URL=firestore (or the same postgres:// URL) and FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY (the same values as on Vercel).');
+  }
   if (!config.firebase.projectId && !config.localOwner) {
     throw new Error('Firebase is not configured and HOST is not a loopback address. Set FIREBASE_* (sign-in) or listen on 127.0.0.1 for single-user local mode.');
   }
@@ -26,6 +32,8 @@ async function main() {
   });
 
   await career.agent.init();
+  const runner = config.runner.enabled ? new Runner(career) : null;
+  runner?.start();
 
   const runCleanup = () => service.cleanup().catch((e) => logger.warn('cleanup.failed', { error: String(e?.message || e) }));
   runCleanup();
@@ -34,6 +42,7 @@ async function main() {
 
   const shutdown = async () => {
     clearInterval(timer);
+    runner?.stop();
     career.agent.shutdown();
     await career.browser.close();
     server.close();

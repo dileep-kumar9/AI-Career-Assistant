@@ -92,7 +92,9 @@ export async function createApp(deps: AppDeps) {
 
   if (deps.staticDir && fs.existsSync(path.join(deps.staticDir, 'index.html'))) {
     app.use(express.static(deps.staticDir, { index: false, maxAge: '1h' }));
-    app.get('*', (_req, res) => res.sendFile(path.join(deps.staticDir!, 'index.html')));
+    // The build writes app.html (not indexed by search engines) for app pages and keeps index.html for the landing page.
+    const appHtml = fs.existsSync(path.join(deps.staticDir, 'app.html')) ? 'app.html' : 'index.html';
+    app.get('*', (req, res) => res.sendFile(path.join(deps.staticDir!, req.path === '/' ? 'index.html' : appHtml)));
   }
 
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {

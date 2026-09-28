@@ -2,7 +2,7 @@
 
 Tailor your resume to every job, apply from a single link or let an agent search and apply for you, then track applications, prepare for interviews and close skill gaps — **using only your real experience**.
 
-It runs on your own computer (the job automation drives a real Chrome window with your logins), stores data in your Firebase project (Firestore collections prefixed `aca_`) or a local SQLite file, and works with free AI keys (Gemini / Groq / Mistral, optional Claude) — or with no AI at all, using clearly labelled rule-based fallbacks.
+It runs on your own computer (the job automation drives a real Chrome window with your logins) — or hosted on **Vercel** with a small **runner** on your computer doing the browser work — stores data in your Firebase project (Firestore collections prefixed `aca_`) or a local SQLite file, and works with free AI keys (Gemini / Groq / Mistral, optional Claude) — or with no AI at all, using clearly labelled rule-based fallbacks.
 
 > Design and decisions: [docs/DESIGN.md](docs/DESIGN.md) · Resume engine details: [docs/RESUME_ENGINE.md](docs/RESUME_ENGINE.md)
 > The resume engine is a copy of **resume-creator-ai**; that project is not modified by this app.
@@ -15,12 +15,12 @@ It runs on your own computer (the job automation drives a real Chrome window wit
 |---|---|
 | **Resume Builder & ATS analyzer** | Upload (PDF/DOCX) or paste a resume, analyse it with or without a job description (explained 0–100 ATS score, matched/missing keywords with evidence, “raise your score” plan), tailor it, edit by chat, versions, templates, PDF/DOCX export. A fact guard blocks invented skills, employers, dates and metrics. |
 | **Career Profile** | Auto-filled from your resume (AI or rules; never overwrites what you typed). Contact details, target roles, experience, notice period, salary, work authorisation, optional diversity answers, saved answers, skills tagged *resume / added by you / learned*. Used for searching and for answering application forms. |
-| **Single Job Apply** | Paste one job link → read the page (Greenhouse, Lever, Ashby, Workday, LinkedIn public page, JSON-LD / page text, or your logged-in browser for Naukri/Indeed) → analyse the JD → match score → copy your resume as **“Role – Company”** → tailor → PDF → review → apply → tracker. Review mode (you approve) or auto. |
-| **Auto Job Agent** | ON/OFF with a schedule. Searches by your resume, your skills or both: Greenhouse boards, Lever companies, Ashby orgs, Workday sites, Arbeitnow, Remote OK, LinkedIn (public search; Easy Apply), Naukri and Indeed (logged-in browser). Dedupes, filters (companies, title words, job types, experience, date), matches, tailors, and applies in auto mode within daily limits — or leaves jobs “Ready for review”. Run log and queue. |
-| **Application automation** | Playwright + your installed Chrome with its own profile. A generic form filler reads every field’s question and fills it from your profile, saved answers, or AI **only when your resume/profile supports the answer**; uploads the exact tailored PDF; generates a cover letter when asked. It stops at CAPTCHAs, login walls and questions it cannot answer truthfully, leaving the tab open for you. Appliers for Greenhouse, Lever, Ashby, LinkedIn Easy Apply, Naukri (incl. chatbot questions), Indeed Apply, Workday (assisted) and any other form. |
+| **Single Job Apply** | Paste one job link → read the page (Greenhouse, Lever, Ashby, Workday, LinkedIn public page, **Google Forms**, **Microsoft Forms**, JSON-LD / page text, or your logged-in browser for Naukri/Indeed). On a **third-party page** (a blog, a news post, an aggregator) it finds the real apply link, form or JD on that page and follows it. → analyse the JD → match score (jobs below **50** are left automatically; *Apply anyway* overrides) → copy your resume as **“Role – Company”** → tailor → PDF → review → apply → tracker. Forms get the tailored PDF in their file-upload question. |
+| **Auto Job Agent** | ON/OFF with a schedule. Searches by your resume, your skills or both: Greenhouse boards, Lever companies, Ashby orgs, Workday sites, Arbeitnow, Remote OK, LinkedIn (public search; Easy Apply), Naukri and Indeed (logged-in browser). Dedupes, filters (companies, title words, job types, date and **your experience range**: *Fresher (0)* keeps only fresher / 0-year jobs, *2–3* keeps jobs asking up to 3 years, *2* up to 2; the range is also sent to LinkedIn and Naukri searches), matches, tailors and decides: **skip** when match or tailored ATS is below 50, **auto-approve & apply** when both are ≥ 70, otherwise **ask you**. The review queue opens the next waiting job as soon as you approve or skip one. Run log and queue. |
+| **Application automation** | Playwright + your installed Chrome with its own profile. A generic form filler reads every field’s question and fills it from your profile, saved answers, or AI **only when your resume/profile supports the answer**; uploads the exact tailored PDF; generates a cover letter when asked. When a form asks something only you can answer (e.g. “How many years of Python?”, “Can you join within 15 days?”) the application pauses and **asks you in the app**; your answer is remembered and filled next time, and remembered answers are shown for **review** before submitting (switchable). It stops at CAPTCHAs and login walls, leaving the tab open for you. LinkedIn Easy Apply: contact info → **uploads the tailored resume** in the resume step → questions → review (never ticks “Follow company”). Appliers for Greenhouse, Lever, Ashby, LinkedIn Easy Apply, Naukri (incl. chatbot questions), Indeed Apply, Workday (assisted) and any other form. |
 | **My resumes** | Two lists: **My resumes** (yours) and **Automation resumes** (“Role – Company”, with the application’s status). |
 | **Application Tracker** | Board, table and stats: found → ready → applied → interview → offer / rejected / no response / withdrawn. Notes, interview dates, follow-up reminders (7 days), follow-up / thank-you / withdrawal email drafts (you send them), manual entries, CSV export, response and interview rates by source and by ATS score. |
-| **Interview Prep** | Likely questions for a job from its JD and your resume (technical, resume-based, behavioural, HR), mock answers typed or spoken (browser speech-to-text), per-answer score, strengths, gaps and an improved answer built from your real experience. |
+| **Interview Prep** | A **live AI interview** that speaks and listens: it notices silence and hesitation, offers a hint or a model answer, and asks connecting follow-ups when an answer is partial or wrong. **Coach mode** suggests better answers built from your real experience. Every session is saved in its own folder (role, company, date and time) with the transcript and the job description. |
 | **Skills & Learning** | Skill-gap report from every JD the app has read (demand %, whether your resume shows it, and how many jobs it would **measurably** push over your auto-apply score). Learning plans with steps, search-based resources (no invented links) and a proof project. Confirming a finished plan records a fact that tailoring may then use. |
 | **Career Assistant** | Chat over your own records (RAG: profile, resume, applications and JDs, interviews, learning, agent runs) with citations. Proposes actions — apply to a link, start/stop the agent, change a stage, create interview prep or a learning plan, open a resume — that run only after you press **Confirm**. |
 | **AI layer** | Central, versioned prompt library with JSON schemas and zod validation (`server/src/ai/prompts`), provider fallback chain, prompt-injection guardrails, RAG (BM25 + optional Gemini embeddings), agentic workflows with human checkpoints. Settings → AI shows the prompt catalogue. |
@@ -69,7 +69,7 @@ Open **http://localhost:8081** (use `localhost`, not 127.0.0.1 — Firebase sign
 2. It lists every field with the question a person would read, then answers in this order: **Career Profile rules → your saved answers → AI** (only with `confident=true` from your resume/profile) → otherwise **unanswered**.
 3. Diversity questions → your saved value or “Decline to self-identify”. Required consent boxes are ticked; marketing/newsletter boxes never are.
 4. Your tailored PDF is uploaded; a cover letter (resume facts only) is generated if a form asks.
-5. It presses Submit only when: you approved it (or auto mode + score ≥ your auto-submit threshold + under the daily limit), dry run is off, and every required question was answered truthfully. “Submitted” is recorded only when the site confirms it.
+5. It presses Submit only when: you approved it (or match and tailored ATS are both ≥ your auto-approve score, or auto mode — within the daily limit), dry run is off, and every required question was answered truthfully. “Submitted” is recorded only when the site confirms it.
 6. Otherwise the job becomes **Needs attention** with the reason, and the tab stays open for you to finish; then click **Mark as applied**.
 
 ---
@@ -91,16 +91,40 @@ Open **http://localhost:8081** (use `localhost`, not 127.0.0.1 — Firebase sign
 - **Naukri** applies with your Naukri **profile** resume, not the tailored PDF (the app does not change your Naukri profile).
 - **Workday** needs an account per company: the app opens the pre-filled application and you finish it (assisted).
 - **CAPTCHAs** are never solved automatically.
-- The **agent runs only while the app is running** on your computer (schedules resume after a restart if it was ON). Job automation needs a desktop Chrome, so it is not available from the Docker image (which serves the resume features, tracker and assistant with Firebase sign-in).
+- The **agent and applying run only while the app (or the runner) is running** on your computer (schedules resume after a restart if it was ON). Job automation needs a desktop Chrome, so neither Vercel nor the Docker image can apply by themselves: they queue that work for the runner.
 - Without AI keys: tailoring only re-orders/re-prioritises existing content, interview feedback and learning plans are rule-based (labelled), and chat answers common questions and commands by rules.
 - Stored Firestore data is per owner; queries use single-field filters and in-memory sorting (fine for personal volumes, not for thousands of users).
+
+---
+
+## Deploy to Vercel (hosted app + runner on your computer)
+
+Vercel serves the web app and the API as a serverless function (`api/index.js` → `server/src/vercel.ts`). Serverless functions have no browser and no lasting disk, so:
+
+| Runs on Vercel | Runs on your computer (`npm run runner`) |
+|---|---|
+| Sign-in, Resume Builder & ATS, Career Profile, reading public job pages and forms, matching, tailoring, the tracker, interview practice, skills, the assistant | Applying (your logged-in Chrome), reading login-only pages (Naukri, Indeed, Microsoft Forms), the Auto Job Agent schedule, writing interview folders to disk |
+
+Work that needs the browser is **queued**; the Agent page shows whether your runner is online and how many jobs wait for it. Tailored PDFs are rebuilt on demand from the saved resume version.
+
+1. **Vercel project** → import the GitHub repo. `vercel.json` sets the build (`npm run build && npm run sitemap`), the output (`dist`), the function (300 s), rewrites and a daily cleanup cron.
+2. **Environment variables** (Vercel → Settings → Environment Variables): `DATABASE_URL=firestore`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `VITE_FIREBASE_*`, your AI keys, `CRON_SECRET` (a long random string), and for search engines `SITE_URL` and `GOOGLE_SITE_VERIFICATION` (below).
+3. **Firebase** → Authentication → Settings → Authorized domains → add your Vercel domain.
+4. **Runner** on your computer: in `.env` use the same `DATABASE_URL` / `FIREBASE_*` values plus `RUNNER_OWNERS=<your user id>` (shown on the Agent page of the hosted app), then `npm run runner`. Log in to job sites once at http://localhost:8790 → Settings → Automation browser. The runner only works for the ids in `RUNNER_OWNERS`.
+
+## Search engines (Google)
+
+`npm run sitemap` (run by the Vercel build) writes into `dist/`: an indexable **landing page** (title, description, canonical URL, Open Graph, JSON-LD `WebApplication`, a static copy of the landing text for crawlers), `app.html` for every app page (**noindex**: your data is never indexed), `robots.txt` and `sitemap.xml`.
+
+- Site URL: `SITE_URL` (e.g. `https://your-domain.com`); on Vercel the production domain is used automatically. Without one, `robots.txt` disallows everything.
+- **Google Search Console** → add your site → *HTML tag* method → put the `content` value in `GOOGLE_SITE_VERIFICATION` → redeploy → *Verify* → *Sitemaps* → submit `sitemap.xml`. Searching for the app name finds it once Google has crawled it (usually a few days).
 
 ---
 
 ## Testing
 
 ```bash
-npm test            # 97 tests: resume engine, career API, guardrails, sources, RAG, security, real-browser form filling
+npm test            # 115 tests: resume engine, career API, guardrails, sources, RAG, security, real-browser form filling
 npm run typecheck   # web + server
 npm run lint        # eslint + hidden-character check
 npm run build       # production web bundle + compiled server
@@ -124,7 +148,8 @@ server/src/
   middleware/    Firebase auth, local-mode CSRF / Host guard
 shared/          types shared by server and web (resume, ATS, JD analyser, careerTypes)
 src/             React app: pages (Dashboard, SingleApply, Agent, Tracker, Interview, Skills, Assistant, Profile, Settings, builder, MyResumes)
-scripts/         dev.mjs (run API + web), smoke-sources.ts, check-hidden-chars.mjs
+scripts/         dev.mjs (run API + web), seo.mjs (landing page, robots.txt, sitemap.xml), smoke-sources.ts, check-hidden-chars.mjs
+api/             Vercel function entry (→ server/src/vercel.ts)
 docs/            DESIGN.md (approved design v5), RESUME_ENGINE.md
 ```
 

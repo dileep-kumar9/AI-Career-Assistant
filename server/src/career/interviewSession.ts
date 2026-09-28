@@ -164,6 +164,14 @@ export class InterviewSessionService {
   private async save(doc: SessionDoc): Promise<InterviewSession> {
     doc.updatedAt = now();
     await this.ctx.store.docPut('interview_sessions', doc);
+    await this.writeFolder(doc);
+    return strip(doc);
+  }
+
+  /** transcript.md, session.json and job-description.txt in the session's own folder. */
+  private async writeFolder(doc: SessionDoc) {
+    // Hosted apps have no lasting disk: the runner on your computer writes the folders instead.
+    if (this.ctx.config.serverless) return;
     const view = strip(doc);
     try {
       const dir = path.join(this.root(), doc.folder);
@@ -180,7 +188,13 @@ export class InterviewSessionService {
     } catch (e) {
       logger.warn('interview.folder.write_failed', { error: String((e as Error).message).slice(0, 160) });
     }
-    return view;
+  }
+
+  /** Runner: writes the folders of sessions changed since `since` (practised in the hosted app). */
+  async syncFolders(owner: string, since: string | null): Promise<number> {
+    const docs = (await this.ctx.store.docList<SessionDoc>('interview_sessions', owner, 200)).filter((d) => !since || d.updatedAt > since);
+    for (const d of docs) await this.writeFolder(d);
+    return docs.length;
   }
 
   folderPath(folder: string) {

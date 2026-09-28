@@ -1,4 +1,4 @@
-import type { AgentRun, AgentSettings, AgentStatus, CareerProfile, JobApplication, LogEntry } from '../../../shared/careerTypes.js';
+import type { AgentRun, AgentSettings, AgentStatus, CareerProfile, JobApplication, LogEntry, RunnerInfo } from '../../../shared/careerTypes.js';
 import type { ResumeData } from '../../../shared/resumeTypes.js';
 import type { JDAnalysis } from '../../../shared/jdAnalyzer.js';
 import { collectSkills } from '../../../shared/normalize.js';
@@ -26,6 +26,26 @@ import type { BrowserManager } from './automation/browser.js';
  */
 
 type RunDoc = AgentRun & DocBase;
+
+/** The runner's heartbeat for one owner (written by the runner, read by the hosted app). */
+export interface RunnerBeat extends DocBase {
+  lastSeen: string;
+  host: string;
+  running: boolean;
+  phase: string;
+  nextRunAt: string | null;
+  browser: AgentStatus['browser'];
+}
+
+/** "Run once now" pressed in the hosted app, picked up by the runner. */
+interface RunRequest extends DocBase {
+  requestedAt: string;
+}
+
+/** A runner that has not written for this long is shown as offline. */
+const RUNNER_ONLINE_MS = 3 * 60_000;
+export const beatId = (owner: string) => `hb-${hashOf(owner)}`;
+const requestId = (owner: string) => `req-${hashOf(owner)}`;
 
 export interface SeenJob extends DocBase {
   key: string;
@@ -88,8 +108,41 @@ export class AgentService {
 
   /** Re-schedules agents that were ON when the server stopped. */
   async init() {
+    const { runner } = this.ctx.config;
     const all = await this.ctx.store.docListAll<AgentSettings & DocBase>('agent_settings').catch(() => []);
-    for (const s of all) if (s.enabled) this.schedule(s.ownerUid, 60_000);
+    // A runner only works for the accounts it was set up for (RUNNER_OWNERS).
+    for (const s of all) if (s.enabled && (!runner.enabled || runner.owners.includes(s.ownerUid))) this.schedule(s.ownerUid, 60_000);
+  }
+
+  /** Runner: follows ON/OFF switched in the hosted app. */
+  async syncSchedule(owner: string) {
+    const s = await this.settings(owner);
+    if (s.enabled && !this.timers.has(owner) && !this.running.has(owner)) this.schedule(owner, 5_000);
+    if (!s.enabled) {
+      clearTimeout(this.timers.get(owner));
+      this.timers.delete(owner);
+      this.nextRun.delete(owner);
+      const r = this.running.get(owner);
+      if (r) r.stop = true;
+    }
+  }
+
+  /** Runner: a "Run once now" from the hosted app, if one is waiting. */
+  async takeRunRequest(owner: string): Promise<boolean> {
+    const req = await this.ctx.store.docGet<RunRequest>('runner_status', requestId(owner));
+    if (!req || req.ownerUid !== owner) return false;
+    await this.ctx.store.docDelete('runner_status', req.id);
+    if (this.running.has(owner)) return false;
+    void this.run(owner, 'manual').catch((e) => logger.warn('agent.run.failed', { error: String(e?.message || e).slice(0, 200) }));
+    return true;
+  }
+
+  /** Runner: what the hosted app shows about this computer. */
+  async beat(owner: string, host: string) {
+    const r = this.running.get(owner);
+    const next = this.nextRun.get(owner);
+    const doc: RunnerBeat = { id: beatId(owner), ownerUid: owner, lastSeen: now(), updatedAt: now(), host, running: !!r, phase: r?.phase || '', nextRunAt: next ? new Date(next).toISOString() : null, browser: this.browser.status() };
+    await this.ctx.store.docPut('runner_status', doc);
   }
 
   shutdown() {
@@ -106,7 +159,7 @@ export class AgentService {
     const cur = await this.settings(owner);
     if (input.resumeId) await this.ctx.resumes.get(input.resumeId, { uid: owner });
     const next = await saveAgentSettings(this.ctx.store, owner, mergeAgentSettings(cur, input));
-    if (next.enabled) this.schedule(owner, Math.max(this.msUntilNext(owner), 5_000));
+    if (next.enabled && !this.ctx.config.serverless) this.schedule(owner, Math.max(this.msUntilNext(owner), 5_000));
     return next;
   }
 
@@ -115,7 +168,8 @@ export class AgentService {
     const sources = Object.values(s.sources).filter((x) => x.enabled);
     if (!sources.length) throw conflict('Turn on at least one job source first.');
     await saveAgentSettings(this.ctx.store, owner, { ...s, enabled: true });
-    this.schedule(owner, 1_000);
+    // Hosted: the runner notices the switch within its poll interval.
+    if (!this.ctx.config.serverless) this.schedule(owner, 1_000);
     return this.status(owner);
   }
 
@@ -131,6 +185,10 @@ export class AgentService {
   }
 
   async runNow(owner: string): Promise<AgentStatus> {
+    if (this.ctx.config.serverless) {
+      await this.ctx.store.docPut<RunRequest>('runner_status', { id: requestId(owner), ownerUid: owner, requestedAt: now(), updatedAt: now() });
+      return this.status(owner);
+    }
     if (this.running.has(owner)) throw conflict('The agent is already running.');
     void this.run(owner, 'manual');
     await new Promise((r) => setTimeout(r, 200));
@@ -160,15 +218,30 @@ export class AgentService {
   async status(owner: string): Promise<AgentStatus> {
     const [s, runs, apps] = await Promise.all([this.settings(owner), this.runs(owner, 1), this.apps.list(owner)]);
     const today = await this.apps.todayCounts(owner, apps);
+    const queued = apps.filter((a) => a.queuedForRunner).length;
+    const base = { enabled: s.enabled, lastRun: runs[0] || null, today: { applied: today.applied, linkedin: today.linkedin, limit: s.dailyLimit, linkedinLimit: s.linkedinDailyLimit } };
+    if (this.ctx.config.serverless) {
+      const hb = await this.ctx.store.docGet<RunnerBeat>('runner_status', beatId(owner)).catch(() => null);
+      const beat = hb && hb.ownerUid === owner ? hb : null;
+      const online = !!beat && Date.now() - Date.parse(beat.lastSeen) < RUNNER_ONLINE_MS;
+      const execution: RunnerInfo = { mode: 'runner', online, lastSeen: beat?.lastSeen || null, host: beat?.host || null, ownerId: owner, queued };
+      return {
+        ...base,
+        running: online && !!beat?.running,
+        phase: !online ? (s.enabled ? 'ON — waiting for the runner on your computer (npm run runner)' : 'Off') : beat?.running ? beat.phase : s.enabled ? 'Waiting for the next run (on your runner)' : 'Off',
+        nextRunAt: online && s.enabled ? beat?.nextRunAt || null : null,
+        browser: beat?.browser || { available: false, open: false, channel: 'runner', error: online ? null : 'The runner on your computer is offline.' },
+        execution,
+      };
+    }
     const r = this.running.get(owner);
     return {
-      enabled: s.enabled,
+      ...base,
       running: !!r,
       phase: r?.phase || (s.enabled ? 'Waiting for the next run' : 'Off'),
       nextRunAt: s.enabled && this.nextRun.get(owner) ? new Date(this.nextRun.get(owner)!).toISOString() : null,
-      lastRun: runs[0] || null,
-      today: { applied: today.applied, linkedin: today.linkedin, limit: s.dailyLimit, linkedinLimit: s.linkedinDailyLimit },
       browser: this.browser.status(),
+      execution: { mode: 'local', online: true, lastSeen: null, host: null, ownerId: owner, queued },
     };
   }
 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { errMsg } from '@/components/career/bits';
 import { toast } from '@/hooks/use-toast';
 import { career } from '@/lib/careerApi';
+import { RunnerBanner } from '@/components/career/RunnerBanner';
 
 const SITES = [
   { id: 'linkedin' as const, label: 'LinkedIn', note: 'Needed for Easy Apply (off by default; against LinkedIn’s terms).' },
@@ -19,6 +20,9 @@ export const Settings: React.FC = () => {
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: career.config });
   const { data: browser } = useQuery({ queryKey: ['browser'], queryFn: career.browserStatus, refetchInterval: 5000 });
   const { data: prompts } = useQuery({ queryKey: ['prompts'], queryFn: career.prompts });
+  const { data: agent } = useQuery({ queryKey: ['agent-status'], queryFn: career.agentStatus, refetchInterval: 30_000 });
+  // Hosted app: the browser lives on the runner (log in there, at localhost).
+  const hosted = agent?.execution.mode === 'runner';
   const open = useMutation({
     mutationFn: career.browserOpen,
     onSuccess: (s) => {
@@ -32,37 +36,40 @@ export const Settings: React.FC = () => {
   return (
     <AppShell title="Settings" subtitle="Automation browser, AI providers and how your data is handled">
       <div className="space-y-5">
-        <section className="rounded-xl border bg-background p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Globe className="w-5 h-5 text-primary" />
-            <h2 className="font-semibold flex-1">Automation browser</h2>
-            <span className="text-xs text-muted-foreground">
-              {browser?.open ? 'Open' : 'Closed'} · {browser?.channel}
-            </span>
-            {browser?.open && (
-              <Button size="sm" variant="outline" onClick={() => close.mutate()}>
-                <Power className="w-4 h-4 mr-1.5" /> Close
-              </Button>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            A separate Chrome window with its own profile. Log in to job sites here once; the app uses these sessions to search and apply, and never sees or stores your passwords. CAPTCHAs and questions it cannot answer are left open in this window for you.
-          </p>
-          {browser?.error && <p className="text-sm text-destructive">{browser.error}</p>}
-          <div className="grid gap-2 sm:grid-cols-2">
-            {SITES.map((s) => (
-              <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{s.label}</div>
-                  <div className="text-xs text-muted-foreground">{s.note}</div>
-                </div>
-                <Button size="sm" variant="outline" disabled={open.isPending} onClick={() => open.mutate(s.id)}>
-                  {open.isPending && open.variables === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Open to log in'}
+        <RunnerBanner info={agent?.execution} />
+        {!hosted && (
+          <section className="rounded-xl border bg-background p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Globe className="w-5 h-5 text-primary" />
+              <h2 className="font-semibold flex-1">Automation browser</h2>
+              <span className="text-xs text-muted-foreground">
+                {browser?.open ? 'Open' : 'Closed'} · {browser?.channel}
+              </span>
+              {browser?.open && (
+                <Button size="sm" variant="outline" onClick={() => close.mutate()}>
+                  <Power className="w-4 h-4 mr-1.5" /> Close
                 </Button>
-              </div>
-            ))}
-          </div>
-        </section>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              A separate Chrome window with its own profile. Log in to job sites here once; the app uses these sessions to search and apply, and never sees or stores your passwords. CAPTCHAs and questions it cannot answer are left open in this window for you.
+            </p>
+            {browser?.error && <p className="text-sm text-destructive">{browser.error}</p>}
+            <div className="grid gap-2 sm:grid-cols-2">
+              {SITES.map((s) => (
+                <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{s.label}</div>
+                    <div className="text-xs text-muted-foreground">{s.note}</div>
+                  </div>
+                  <Button size="sm" variant="outline" disabled={open.isPending} onClick={() => open.mutate(s.id)}>
+                    {open.isPending && open.variables === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Open to log in'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-xl border bg-background p-4 space-y-2">
           <h2 className="font-semibold">AI providers</h2>

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build && npm run sitemap",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/index.js": { "maxDuration": 300, "memory": 1024, "includeFiles": "build/**" }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/((?!api/).*)", "destination": "/app.html" }
+  ],
+  "headers": [
+    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+  ],
+  "crons": [{ "path": "/api/cron/cleanup", "schedule": "0 3 * * *" }]
+}

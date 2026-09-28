@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ChipsInput, StageBadge, errMsg, fmtDate } from '@/components/career/bits';
 import { ResumeSelect } from '@/components/career/ResumeSelect';
+import { RunnerBanner } from '@/components/career/RunnerBanner';
 import { toast } from '@/hooks/use-toast';
 import { career } from '@/lib/careerApi';
 
@@ -130,6 +131,7 @@ export const Agent: React.FC = () => {
           <span className="text-sm font-medium">{status?.enabled ? 'ON' : 'OFF'}</span>
         </div>
       </section>
+      <RunnerBanner info={status?.execution} className="mb-5" />
       {dirty && <p className="mb-4 text-sm text-amber-700 dark:text-amber-400">You have unsaved changes — save them before switching the agent on or running it.</p>}
       {status?.browser.error && (
         <p className="mb-4 flex gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm">

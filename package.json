@@ -20,7 +20,9 @@
     "dev:all": "node scripts/dev.mjs",
     "smoke:sources": "tsx scripts/smoke-sources.ts",
     "check:hidden": "node scripts/check-hidden-chars.mjs",
-    "serve:api": "node --env-file-if-exists=.env --import tsx server/src/index.ts"
+    "serve:api": "node --env-file-if-exists=.env --import tsx server/src/index.ts",
+    "runner": "node --env-file-if-exists=.env --import tsx server/src/index.ts --runner",
+    "sitemap": "node scripts/seo.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
@@ -55,6 +57,7 @@
     "@react-pdf/renderer": "^4.3.0",
     "@tanstack/react-query": "^5.83.0",
     "@types/file-saver": "^2.0.7",
+    "@vercel/functions": "^3.9.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

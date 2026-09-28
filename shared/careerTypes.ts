@@ -152,6 +152,8 @@ export interface JobApplication {
   answerOverrides: Array<{ question: string; answer: string }>;
   /** Experience the job asks for, e.g. "5-7 years" (empty when not stated). */
   experienceRequired: string;
+  /** Hosted app: this is waiting for the runner on your computer (it needs the browser). */
+  queuedForRunner: 'pipeline' | 'apply' | null;
   mode: 'review' | 'auto' | 'manual';
   stage: ApplicationStage;
   /** Why it needs attention / failed / was skipped. */
@@ -232,6 +234,24 @@ export interface AgentStatus {
   lastRun: AgentRun | null;
   today: { applied: number; linkedin: number; limit: number; linkedinLimit: number };
   browser: { available: boolean; open: boolean; channel: string; error: string | null };
+  /**
+   * Where browser work runs. "local": this server drives the browser itself.
+   * "runner": the app is hosted (Vercel) and the runner on your computer
+   * (npm run runner) applies, reads login-only pages and runs the agent.
+   */
+  execution: RunnerInfo;
+}
+
+export interface RunnerInfo {
+  mode: 'local' | 'runner';
+  /** Runner mode: seen in the last couple of minutes. */
+  online: boolean;
+  lastSeen: string | null;
+  host: string | null;
+  /** Put this in RUNNER_OWNERS on the computer that runs the runner. */
+  ownerId: string;
+  /** Applications waiting for the runner. */
+  queued: number;
 }
 
 // ------------------------------------------------------------------ interview prep

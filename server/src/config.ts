@@ -26,6 +26,14 @@ export interface AppConfig {
   localOwner: string | null;
   /** Firestore collection prefix; keeps this app's data apart from resume-creator-ai in a shared project. */
   firestorePrefix: string;
+  /**
+   * Serverless host (Vercel): no browser, no timers, no lasting disk. Browser
+   * work (applying, reading login-only pages, the job agent) is queued for the
+   * runner on your computer.
+   */
+  serverless: boolean;
+  /** This process is the runner: it does the queued browser work and the job agent for these owners. */
+  runner: { enabled: boolean; owners: string[]; pollMs: number };
   automation: {
     /** Chrome profile used for job sites (you log in to LinkedIn/Naukri/Indeed there once). */
     browserProfileDir: string;
@@ -64,7 +72,9 @@ function parseWeights(raw: string | undefined): AtsWeights {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const dataDir = path.resolve(env.DATA_DIR || './data');
+  const serverless = !!env.VERCEL || env.ACA_SERVERLESS === 'true';
+  // Only /tmp is writable on serverless hosts (and it does not last).
+  const dataDir = path.resolve(env.DATA_DIR || (serverless ? '/tmp/aca-data' : './data'));
   const host = (env.HOST || '127.0.0.1').trim();
   const projectId = (env.FIREBASE_PROJECT_ID || '').trim().replace(/^"|"$/g, '');
   const loopback = ['127.0.0.1', 'localhost', '::1'].includes(host);
@@ -98,6 +108,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     requireAuth: env.REQUIRE_AUTH ? env.REQUIRE_AUTH.trim() === 'true' : !!projectId,
     localOwner: !projectId && loopback && env.LOCAL_SINGLE_USER !== 'false' ? 'local' : null,
     firestorePrefix: (env.FIRESTORE_PREFIX ?? 'aca_').trim(),
+    serverless,
+    runner: {
+      enabled: env.ACA_RUNNER === 'true' && !serverless,
+      owners: (env.RUNNER_OWNERS || '').split(',').map((s) => s.trim()).filter(Boolean),
+      pollMs: Math.max(5_000, Number(env.RUNNER_POLL_MS || 15_000)),
+    },
     automation: {
       browserProfileDir: path.resolve(env.BROWSER_PROFILE_DIR || path.join(dataDir, 'browser-profile')),
       browserChannel: (env.BROWSER_CHANNEL || 'chrome').trim(),

@@ -1,0 +1,17 @@
+{
+  "title": "AI Career Assistant — AI resume tailoring, ATS checker and auto job apply",
+  "description": "Tailor your resume to any job with an explained ATS score, apply from one job link or let the AI job agent search and apply for you, then track applications, practise live AI interviews and close skill gaps — using only your real experience.",
+  "headline": "Your job search, on autopilot — truthfully.",
+  "intro": "Tailor your resume to every job, apply from a single link or let the agent search and apply for you, then track, prepare and grow — all from one place.",
+  "keywords": ["AI resume builder", "ATS resume checker", "resume tailoring", "auto job apply", "LinkedIn Easy Apply automation", "job application tracker", "AI mock interview", "skill gap analysis"],
+  "features": [
+    { "icon": "resume", "title": "Resume Builder & ATS analyzer", "text": "Upload once, tailor to any job with an explained ATS score — only your real experience." },
+    { "icon": "link", "title": "Single Job Apply", "text": "Paste a job link — careers pages, Google Forms or Microsoft Forms: it finds the JD, tailors your resume as “Role – Company” and applies." },
+    { "icon": "agent", "title": "Auto Job Agent", "text": "Searches jobs by your resume or skills and experience, skips poor matches, tailors and applies within your limits while it is on." },
+    { "icon": "tracker", "title": "Application Tracker", "text": "From found to offer: stages, follow-up reminders, email drafts and response-rate stats." },
+    { "icon": "interview", "title": "Live AI Interview Prep", "text": "A spoken mock interview that listens, notices hesitation, gives hints and asks follow-up questions — every session saved." },
+    { "icon": "skills", "title": "Skills & Learning", "text": "Skill gaps measured across real job descriptions, study plans and proof projects." },
+    { "icon": "chat", "title": "Career Assistant", "text": "Ask about your own records or tell it what to do — every action waits for your confirmation." },
+    { "icon": "honest", "title": "Honest by design", "text": "No invented skills, metrics or employers. It learns your answers to application questions and asks you to review them." }
+  ]
+}

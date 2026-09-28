@@ -22,6 +22,7 @@ import { readJobLink } from './jobs/readers.js';
 import type { BrowserManager } from './automation/browser.js';
 import { AnswerEngine } from './automation/answers.js';
 import { runApplier } from './automation/appliers.js';
+import { keepAlive } from './keepAlive.js';
 
 /**
  * Applications: the pipeline shared by Single Job Apply and the job agent,
@@ -32,10 +33,14 @@ import { runApplier } from './automation/appliers.js';
  *   applied → interview → offer | rejected | no_response | withdrawn
  */
 
+/** Work handed to the runner on your computer when the app is hosted without a browser. */
+export type RunnerTask = { kind: 'pipeline'; resumeId: string | null } | { kind: 'apply'; submit: boolean; trigger: 'user' | 'auto' | 'agent' };
+
 /** Stored application: also remembers whether to submit once you have answered its questions. */
-export type AppDoc = JobApplication & DocBase & { submitAfterAnswers?: boolean };
+export type AppDoc = JobApplication & DocBase & { submitAfterAnswers?: boolean; runnerTask?: RunnerTask | null };
 
 const FOLLOW_UP_DAYS = 7;
+const queueMarkerId = (owner: string) => `q-${hashOf(owner)}`;
 const ACTIVE_STAGES: ApplicationStage[] = ['tailoring', 'applying'];
 
 export class ApplicationService {
@@ -75,9 +80,12 @@ export class ApplicationService {
     doc.pendingQuestions ??= [];
     doc.answerOverrides ??= [];
     doc.experienceRequired ??= '';
+    doc.runnerTask ??= null;
+    doc.queuedForRunner = doc.runnerTask?.kind ?? null;
     // Only when no process has touched it for a while: on serverless hosts another instance may still be working on it.
     const stale = Date.now() - Date.parse(doc.updatedAt) > 15 * 60_000;
-    if (ACTIVE_STAGES.includes(doc.stage) && !this.active.has(doc.id) && stale) {
+    // Work queued for the runner waits for it however long that takes.
+    if (ACTIVE_STAGES.includes(doc.stage) && !doc.runnerTask && !this.active.has(doc.id) && stale) {
       moveTo(doc, 'needs_attention', 'Interrupted (the app was restarted or the step crashed). Click Retry.');
       await this.save(doc);
     }
@@ -131,6 +139,8 @@ export class ApplicationService {
       pendingQuestions: [],
       answerOverrides: [],
       experienceRequired: '',
+      queuedForRunner: null,
+      runnerTask: null,
       mode: p.mode,
       stage: 'found',
       reason: '',
@@ -199,9 +209,68 @@ export class ApplicationService {
     this.active.add(id);
     const run = this.prepChain.then(fn, fn);
     this.prepChain = run.catch(() => undefined);
-    run
-      .catch((e) => logger.warn('application.pipeline.failed', { error: String((e as Error)?.message || e).slice(0, 200) }))
-      .finally(() => this.active.delete(id));
+    keepAlive(
+      run
+        .catch((e) => logger.warn('application.pipeline.failed', { error: String((e as Error)?.message || e).slice(0, 200) }))
+        .finally(() => this.active.delete(id)),
+    );
+  }
+
+  // ------------------------------------------------------------------ runner (hosted app)
+
+  /** Hosted without a browser: the runner on your computer does this step. */
+  private async queueForRunner(doc: AppDoc, task: RunnerTask, note: string): Promise<AppDoc> {
+    doc.runnerTask = task;
+    doc.queuedForRunner = task.kind;
+    moveTo(doc, task.kind === 'apply' ? 'applying' : 'found', note);
+    log(doc, 'info', 'Waiting for the runner on your computer (npm run runner). It uses your logged-in browser there.');
+    await this.save(doc);
+    // One small document the runner checks, instead of re-reading every application each poll.
+    await this.ctx.store.docPut('runner_status', { id: queueMarkerId(doc.ownerUid), ownerUid: doc.ownerUid, updatedAt: now() });
+    return doc;
+  }
+
+  /** Runner: true (once) when the hosted app queued work since the last check. */
+  async takeQueueMarker(owner: string): Promise<boolean> {
+    const marker = await this.ctx.store.docGet('runner_status', queueMarkerId(owner));
+    if (!marker || marker.ownerUid !== owner) return false;
+    await this.ctx.store.docDelete('runner_status', marker.id);
+    return true;
+  }
+
+  /** Runner: does the queued browser work for one owner, oldest first. Returns how many it handled. */
+  async runQueued(owner: string, stop: () => boolean = () => false): Promise<number> {
+    const docs = (await this.ctx.store.docList<AppDoc>('job_applications', owner, 3000)).filter((d) => d.runnerTask).reverse();
+    let done = 0;
+    for (const d of docs) {
+      if (stop()) break;
+      const task = d.runnerTask!;
+      d.runnerTask = null;
+      d.queuedForRunner = null;
+      log(d, 'info', 'The runner on your computer picked this up.');
+      await this.save(d);
+      this.active.add(d.id);
+      try {
+        if (task.kind === 'pipeline') await this.runSingle(owner, d.id, task.resumeId);
+        else await this.apply(owner, d.id, { submit: task.submit, trigger: task.trigger });
+      } catch (e) {
+        logger.warn('runner.task.failed', { error: String((e as Error)?.message || e).slice(0, 200) });
+      } finally {
+        this.active.delete(d.id);
+      }
+      done++;
+    }
+    return done;
+  }
+
+  /** Applications waiting for the runner. */
+  async queuedCount(owner: string): Promise<number> {
+    return (await this.list(owner)).filter((a) => a.queuedForRunner).length;
+  }
+
+  /** Being worked on (and not merely waiting for the runner). */
+  private busy(doc: AppDoc) {
+    return ACTIVE_STAGES.includes(doc.stage) && !doc.runnerTask;
   }
 
   /** The resume to tailor from: the one you chose, else the profile default, else your newest resume. */
@@ -215,8 +284,12 @@ export class ApplicationService {
 
   private async runSingle(owner: string, id: string, resumeId: string | null) {
     const doc = await this.load(owner, id);
+    let neededBrowser = false;
     try {
-      const posting = await readJobLink(doc.jobUrl, (u) => this.browser.readPage(u));
+      const posting = await readJobLink(doc.jobUrl, (u) => {
+        neededBrowser = true;
+        return this.browser.readPage(u);
+      });
       Object.assign(doc, {
         source: posting.source,
         externalId: posting.externalId,
@@ -241,6 +314,10 @@ export class ApplicationService {
       }
       await this.save(doc);
     } catch (e) {
+      if (neededBrowser && this.ctx.config.serverless) {
+        await this.queueForRunner(doc, { kind: 'pipeline', resumeId }, 'This page needs your logged-in browser');
+        return;
+      }
       moveTo(doc, 'failed', e instanceof HttpError ? e.message : `Could not read the job page: ${String((e as Error).message).slice(0, 200)}`);
       await this.save(doc);
       return;
@@ -268,7 +345,7 @@ export class ApplicationService {
   /** Prepare a job the skip rule left out (you decided to apply anyway). */
   async prepareAnyway(owner: string, id: string): Promise<JobApplication> {
     const doc = await this.load(owner, id);
-    if (ACTIVE_STAGES.includes(doc.stage)) throw conflict('This application is already being processed.');
+    if (this.busy(doc)) throw conflict('This application is already being processed.');
     doc.matchScore = null;
     moveTo(doc, 'matched', 'You chose to apply anyway');
     await this.save(doc);
@@ -378,7 +455,13 @@ export class ApplicationService {
   async resumePdf(owner: string, id: string): Promise<{ buffer: Buffer; filename: string }> {
     const doc = await this.load(owner, id);
     const dir = this.dir(owner, doc.id);
-    const name = (await fs.readdir(dir).catch(() => [] as string[])).find((f) => f.endsWith('_Resume.pdf'));
+    let name = (await fs.readdir(dir).catch(() => [] as string[])).find((f) => f.endsWith('_Resume.pdf'));
+    // Hosted apps keep no lasting disk: rebuild the PDF from the saved resume version.
+    if (!name && doc.resumeSessionId) {
+      const profile = await this.profiles.get(owner);
+      await this.writeResumePdf(owner, doc, profile.basics.fullName);
+      name = (await fs.readdir(dir).catch(() => [] as string[])).find((f) => f.endsWith('_Resume.pdf'));
+    }
     if (!name) throw notFound('No tailored resume PDF for this application yet.');
     return { buffer: await fs.readFile(path.join(dir, name)), filename: name };
   }
@@ -425,7 +508,7 @@ export class ApplicationService {
    */
   async provideAnswers(owner: string, id: string, input: { answers: Array<{ question: string; answer: string; remember: boolean }>; submit?: boolean }): Promise<JobApplication> {
     const doc = await this.load(owner, id);
-    if (ACTIVE_STAGES.includes(doc.stage)) throw conflict('This application is already being processed.');
+    if (this.busy(doc)) throw conflict('This application is already being processed.');
     if (!doc.resumeSessionId) throw conflict('Prepare the tailored resume first (Retry).');
     for (const a of input.answers) {
       const answer = a.answer.trim();
@@ -456,6 +539,10 @@ export class ApplicationService {
   }
 
   async apply(owner: string, id: string, opts: { submit: boolean; trigger: 'user' | 'auto' | 'agent' }): Promise<AppDoc> {
+    if (this.ctx.config.serverless) {
+      const doc = await this.load(owner, id);
+      return this.queueForRunner(doc, { kind: 'apply', ...opts }, opts.submit ? 'Approved: queued for the runner' : 'Fill only: queued for the runner');
+    }
     this.active.add(id);
     const doc = await this.load(owner, id);
     try {
@@ -570,7 +657,9 @@ export class ApplicationService {
 
   async retry(owner: string, id: string): Promise<JobApplication> {
     const doc = await this.load(owner, id);
-    if (ACTIVE_STAGES.includes(doc.stage)) throw conflict('This application is already being processed.');
+    if (this.busy(doc)) throw conflict('This application is already being processed.');
+    doc.runnerTask = null;
+    doc.queuedForRunner = null;
     if (!doc.description) {
       moveTo(doc, 'found', 'Retrying: reading the job page');
       await this.save(doc);
@@ -586,7 +675,9 @@ export class ApplicationService {
 
   async setStage(owner: string, id: string, input: { stage: ApplicationStage; note?: string; interviewAt?: string | null }): Promise<JobApplication> {
     const doc = await this.load(owner, id);
-    if (ACTIVE_STAGES.includes(doc.stage)) throw conflict('Wait until the current step finishes.');
+    if (this.busy(doc)) throw conflict('Wait until the current step finishes.');
+    doc.runnerTask = null;
+    doc.queuedForRunner = null;
     if (!TRACKER_STAGES.includes(input.stage as TrackerStage) && input.stage !== 'skipped') throw badRequest('Stage must be one of: applied, interview, offer, rejected, no_response, withdrawn or skipped.');
     if (input.stage === 'applied' && !doc.appliedAt) {
       doc.appliedAt = now();
@@ -616,7 +707,7 @@ export class ApplicationService {
 
   async remove(owner: string, id: string): Promise<void> {
     const doc = await this.load(owner, id);
-    if (ACTIVE_STAGES.includes(doc.stage)) throw conflict('Wait until the current step finishes.');
+    if (this.busy(doc)) throw conflict('Wait until the current step finishes.');
     await this.ctx.store.docDelete('job_applications', doc.id);
     await fs.rm(this.dir(owner, doc.id), { recursive: true, force: true }).catch(() => undefined);
   }
@@ -647,6 +738,6 @@ export function addDays(iso: string, days: number): string {
 }
 
 function strip(doc: AppDoc | JobApplication): JobApplication {
-  const { ownerUid: _o, submitAfterAnswers: _s, ...rest } = doc as AppDoc;
-  return rest;
+  const { ownerUid: _o, submitAfterAnswers: _s, runnerTask, ...rest } = doc as AppDoc;
+  return { ...rest, queuedForRunner: runnerTask?.kind ?? rest.queuedForRunner ?? null };
 }

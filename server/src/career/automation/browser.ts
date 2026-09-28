@@ -106,3 +106,23 @@ export class BrowserManager {
 
 /** Small random pause so actions are not machine-gun fast. */
 export const humanPause = (min = 250, max = 800) => new Promise((r) => setTimeout(r, min + Math.random() * (max - min)));
+
+/**
+ * Hosted (serverless) app: there is no browser here. Pages that need one and
+ * every application are queued for the runner on your computer instead.
+ */
+export class RemoteBrowser extends BrowserManager {
+  static readonly MESSAGE = 'The hosted app has no browser. Start the runner on your computer (npm run runner) and log in to job sites there: open http://localhost:8790 → Settings → Automation browser.';
+  override status() {
+    return { available: false, open: false, channel: 'runner', error: RemoteBrowser.MESSAGE };
+  }
+  override async context(): Promise<never> {
+    throw new Error(RemoteBrowser.MESSAGE);
+  }
+  override async readPage() {
+    return null;
+  }
+  override async openForLogin(): Promise<void> {
+    throw new Error(RemoteBrowser.MESSAGE);
+  }
+}

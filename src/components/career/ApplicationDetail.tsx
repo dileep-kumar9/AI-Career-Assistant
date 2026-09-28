@@ -107,6 +107,12 @@ export const ApplicationDetail: React.FC<{ id: string; onDeleted?: () => void; o
         </div>
       )}
 
+      {a.queuedForRunner && (
+        <div className="rounded-lg border border-sky-300 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 text-sm">
+          Waiting for the runner on your computer ({a.queuedForRunner === 'apply' ? 'it applies in your logged-in browser' : 'this page needs your logged-in browser'}). Start it with <code>npm run runner</code> — see Auto Job Agent.
+        </div>
+      )}
+
       <QuestionsPanel app={a} busy={busy} onSubmit={(answers) => decideAct.mutate(() => career.answerQuestions(a.id, answers))} />
 
       {a.stage === 'skipped' && /below|apply anyway/i.test(a.reason) && (

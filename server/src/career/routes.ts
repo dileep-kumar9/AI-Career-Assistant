@@ -98,8 +98,9 @@ export function careerRoutes(m: CareerModules, config: AppConfig): Router {
 
   // ---------------------------------------------------------------- automation browser
   r.get('/browser/status', wrap(async (req, res) => {
-    ownerOf(req);
-    res.json(m.browser.status());
+    const owner = ownerOf(req);
+    // Hosted: the browser is the runner's, as its last heartbeat reported it.
+    res.json(config.serverless ? (await m.agent.status(owner)).browser : m.browser.status());
   }));
   r.post('/browser/open', wrap(async (req, res) => {
     ownerOf(req);

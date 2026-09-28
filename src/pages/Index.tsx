@@ -4,17 +4,11 @@ import { Bot, FileCheck2, GraduationCap, KanbanSquare, Link2, MessageSquare, Mic
 import { Button } from '../components/ui/button';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { UserMenu } from '@/components/auth/UserMenu';
+import landing from '@/content/landing.json';
 
-const FEATURES = [
-  { icon: FileCheck2, title: 'Resume Builder & ATS analyzer', text: 'Upload once, tailor to any job with an explained ATS score — only your real experience.' },
-  { icon: Link2, title: 'Single Job Apply', text: 'Paste a job link: it reads the JD, tailors your resume as “Role – Company” and applies.' },
-  { icon: Bot, title: 'Auto Job Agent', text: 'Searches jobs by your resume or skills, tailors and applies within your limits while it is on.' },
-  { icon: KanbanSquare, title: 'Application Tracker', text: 'From found to offer: stages, follow-up reminders, email drafts and response-rate stats.' },
-  { icon: Mic, title: 'Interview Prep', text: 'Likely questions for each job and your resume, mock answers by voice or text, and coaching.' },
-  { icon: GraduationCap, title: 'Skills & Learning', text: 'Skill gaps measured across real job descriptions, study plans and proof projects.' },
-  { icon: MessageSquare, title: 'Career Assistant', text: 'Ask about your own records or tell it what to do — every action waits for your confirmation.' },
-  { icon: ShieldCheck, title: 'Honest by design', text: 'No invented skills, metrics or employers. CAPTCHAs and unknown questions are left for you.' },
-];
+// Shared with the build's search-engine snapshot (scripts/seo.mjs).
+const ICONS: Record<string, typeof Bot> = { resume: FileCheck2, link: Link2, agent: Bot, tracker: KanbanSquare, interview: Mic, skills: GraduationCap, chat: MessageSquare, honest: ShieldCheck };
+const FEATURES = landing.features.map((f) => ({ ...f, icon: ICONS[f.icon] || Sparkles }));
 
 /** Landing page for signed-out visitors. */
 const Index = () => (
@@ -33,8 +27,8 @@ const Index = () => (
     </header>
     <main className="mx-auto max-w-6xl px-4 pb-16">
       <section className="py-12 md:py-20 text-center max-w-3xl mx-auto">
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Your job search, on autopilot — truthfully.</h1>
-        <p className="mt-4 text-lg text-muted-foreground">Tailor your resume to every job, apply from a single link or let the agent search and apply for you, then track, prepare and grow — all from one place on your own computer.</p>
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tight">{landing.headline}</h1>
+        <p className="mt-4 text-lg text-muted-foreground">{landing.intro}</p>
         <div className="mt-8 flex justify-center">
           <Button size="lg" asChild>
             <Link to="/login">Sign in to start</Link>

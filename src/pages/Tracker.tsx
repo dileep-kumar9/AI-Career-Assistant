@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -134,6 +134,22 @@ export const Tracker: React.FC = () => {
     return next;
   });
   const stats = overview?.stats;
+  // Jobs waiting for you: ready for review, or paused with questions.
+  const waiting = apps.filter((a) => a.stage === 'ready' || (a.stage === 'needs_attention' && a.waitingFor));
+  const openNext = (done?: JobApplication) => {
+    const next = waiting.find((a) => a.id !== done?.id);
+    if (next) {
+      open(next.id);
+      toast({ title: 'Next job waiting for you', description: `${next.jobTitle} at ${next.company}` });
+    } else {
+      open(null);
+      toast({ title: 'All caught up', description: 'No more jobs are waiting for your review.' });
+    }
+  };
+  useEffect(() => {
+    if (params.get('review') && waiting[0] && !openId) open(waiting[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.get('review'), waiting.length]);
 
   return (
     <AppShell
@@ -145,7 +161,10 @@ export const Tracker: React.FC = () => {
           <Button size="sm" variant="outline" onClick={() => download('/tracker/export.csv', 'applications.csv').catch((e) => toast({ title: errMsg(e), variant: 'destructive' }))}>
             <Download className="w-4 h-4 mr-1.5" /> CSV
           </Button>
-          <Button size="sm" onClick={() => setManual(true)}>
+          <Button size="sm" variant={waiting.length ? 'default' : 'outline'} disabled={!waiting.length} onClick={() => openNext()}>
+            Review queue ({waiting.length})
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setManual(true)}>
             <Plus className="w-4 h-4 mr-1.5" /> Add job
           </Button>
         </>
@@ -307,7 +326,7 @@ export const Tracker: React.FC = () => {
           <SheetHeader>
             <SheetTitle className="sr-only">Application</SheetTitle>
           </SheetHeader>
-          {openId && <ApplicationDetail id={openId} onDeleted={() => open(null)} />}
+          {openId && <ApplicationDetail id={openId} onDeleted={() => open(null)} onDone={(done) => openNext(done)} />}
         </SheetContent>
       </Sheet>
       <ManualDialog open={manual} onOpenChange={setManual} />

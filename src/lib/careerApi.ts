@@ -108,6 +108,8 @@ export const career = {
   addManual: (a: { jobTitle: string; company: string; jobUrl?: string; location?: string; stage?: TrackerStage; appliedAt?: string | null; notes?: string }) => req<JobApplication>('POST', '/applications/manual', a),
   approve: (id: string, submit: boolean) => req<JobApplication>('POST', `/applications/${id}/approve`, { submit }),
   retry: (id: string) => req<JobApplication>('POST', `/applications/${id}/retry`),
+  prepareAnyway: (id: string) => req<JobApplication>('POST', `/applications/${id}/prepare-anyway`),
+  answerQuestions: (id: string, answers: Array<{ question: string; answer: string; remember: boolean }>, submit?: boolean) => req<JobApplication>('POST', `/applications/${id}/answers`, { answers, submit }),
   setStage: (id: string, stage: TrackerStage | 'skipped', extra: { note?: string; interviewAt?: string | null } = {}) => req<JobApplication>('POST', `/applications/${id}/stage`, { stage, ...extra }),
   updateApplication: (id: string, patch: { notes?: string; followUpAt?: string | null; interviewAt?: string | null; jobTitle?: string; company?: string }) => req<JobApplication>('PATCH', `/applications/${id}`, patch),
   removeApplication: (id: string) => req<void>('DELETE', `/applications/${id}`),

@@ -102,7 +102,17 @@ export const SingleApply: React.FC = () => {
         </aside>
         <section className="rounded-xl border bg-background p-4 min-h-[20rem]">
           {selected ? (
-            <ApplicationDetail id={selected} onDeleted={() => setParams({})} />
+            <ApplicationDetail
+              id={selected}
+              onDeleted={() => setParams({})}
+              onDone={(done) => {
+                const next = mine.find((a) => a.id !== done.id && (a.stage === 'ready' || (a.stage === 'needs_attention' && a.waitingFor)));
+                if (next) {
+                  setParams({ id: next.id });
+                  toast({ title: 'Next job waiting for you', description: `${next.jobTitle} at ${next.company}` });
+                }
+              }}
+            />
           ) : (
             <Empty icon={Link2} title="Paste a job link to begin">
               The tailored resume, match score and every step appear here.

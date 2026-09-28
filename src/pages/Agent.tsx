@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Bot, Loader2, Play, Save } from 'lucide-react';
+import { AlertTriangle, Bot, ListChecks, Loader2, Play, Save } from 'lucide-react';
 import type { AgentSettings, JobType } from '../../shared/careerTypes';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,18 @@ function Num({ value, onChange, min, max, className }: { value: number | null; o
 }
 
 const JOB_TYPES: JobType[] = ['full-time', 'part-time', 'contract', 'internship'];
+
+/** Experience presets: a job fits when the years it asks for are at most your max. */
+const EXPERIENCE_PRESETS: Array<{ label: string; min: number | null; max: number | null }> = [
+  { label: 'From profile', min: null, max: null },
+  { label: 'Fresher (0)', min: 0, max: 0 },
+  { label: '0–1', min: 0, max: 1 },
+  { label: '1–2', min: 1, max: 2 },
+  { label: '2', min: null, max: 2 },
+  { label: '2–3', min: 2, max: 3 },
+  { label: '3–5', min: 3, max: 5 },
+  { label: '5–8', min: 5, max: 8 },
+];
 
 export const Agent: React.FC = () => {
   const qc = useQueryClient();
@@ -72,6 +84,7 @@ export const Agent: React.FC = () => {
 
   if (!s) return <AppShell title="Auto Job Agent">Loading…</AppShell>;
   const set = <K extends keyof AgentSettings>(k: K, v: AgentSettings[K]) => setS({ ...s, [k]: v });
+  const setMany = (patch: Partial<AgentSettings>) => setS({ ...s, ...patch });
   const src = <K extends keyof AgentSettings['sources']>(k: K, v: Partial<AgentSettings['sources'][K]>) => setS({ ...s, sources: { ...s.sources, [k]: { ...s.sources[k], ...v } } });
   const queue = apps.filter((a) => a.origin === 'agent');
 
@@ -99,13 +112,18 @@ export const Agent: React.FC = () => {
           {status && (
             <p className="text-xs text-muted-foreground">
               Today: {status.today.applied}/{status.today.limit} applied{status.today.linkedinLimit ? ` · LinkedIn ${status.today.linkedin}/${status.today.linkedinLimit}` : ''}
-              {status.nextRunAt && ` · next run ${fmtDate(status.nextRunAt, true)}`} · mode: {s.mode === 'auto' ? 'auto-submit' : 'review first'}
+              {status.nextRunAt && ` · next run ${fmtDate(status.nextRunAt, true)}`} · mode: {s.mode === 'auto' ? 'auto-submit' : s.autoApprove ? `review (auto-approve ≥ ${s.autoSubmitMin})` : 'review first'}
               {s.dryRun && ' · DRY RUN'}
             </p>
           )}
         </div>
         <Button variant="outline" disabled={!!status?.running || runNow.isPending || dirty} onClick={() => runNow.mutate()} title={dirty ? 'Save settings first' : undefined}>
           <Play className="w-4 h-4 mr-1.5" /> Run once now
+        </Button>
+        <Button variant="outline" asChild>
+          <Link to="/tracker?review=1">
+            <ListChecks className="w-4 h-4 mr-1.5" /> Review queue
+          </Link>
         </Button>
         <div className="flex items-center gap-2">
           <Switch checked={!!status?.enabled} disabled={toggle.isPending || dirty} onCheckedChange={(on) => toggle.mutate(on)} aria-label="Agent on/off" />
@@ -154,9 +172,24 @@ export const Agent: React.FC = () => {
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={s.remoteOk} onCheckedChange={(v) => set('remoteOk', !!v)} /> Remote jobs are OK
                 </label>
-                <div className="flex items-center gap-2 text-sm">
-                  Max years required <Num value={s.experienceMax} onChange={(v) => set('experienceMax', v)} min={0} max={40} className="w-20" />
+              </div>
+              <div className="sm:col-span-2">
+              <Field label="Your experience (years)" hint="Only jobs asking for at most your maximum are kept. Fresher = jobs for 0 years / freshers. Empty = from your Career Profile.">
+                <div className="flex flex-wrap gap-1.5">
+                  {EXPERIENCE_PRESETS.map((p) => {
+                    const on = s.experienceMin === p.min && s.experienceMax === p.max;
+                    return (
+                      <Button key={p.label} type="button" size="sm" variant={on ? 'default' : 'outline'} className="h-7 px-2.5" onClick={() => setMany({ experienceMin: p.min, experienceMax: p.max })}>
+                        {p.label}
+                      </Button>
+                    );
+                  })}
                 </div>
+                <div className="flex items-center gap-2 text-sm mt-2">
+                  From <Num value={s.experienceMin} onChange={(v) => set('experienceMin', v)} min={0} max={40} className="w-20" /> to
+                  <Num value={s.experienceMax} onChange={(v) => set('experienceMax', v)} min={0} max={40} className="w-20" /> years
+                </div>
+              </Field>
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -240,19 +273,19 @@ export const Agent: React.FC = () => {
               <RadioGroup value={s.mode} onValueChange={(v) => (v === 'auto' ? setConfirmAuto(true) : set('mode', 'review'))} className="flex flex-wrap gap-4">
                 <div className="flex items-center gap-1.5">
                   <RadioGroupItem id="mode-review" value="review" />
-                  <Label htmlFor="mode-review" className="font-normal">Review — prepare everything, I approve each application</Label>
+                  <Label htmlFor="mode-review" className="font-normal">Review — I approve jobs below the auto-approve score</Label>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <RadioGroupItem id="mode-auto" value="auto" />
-                  <Label htmlFor="mode-auto" className="font-normal">Auto — submit by itself above the auto-submit score</Label>
+                  <Label htmlFor="mode-auto" className="font-normal">Auto — apply to every job that is not skipped</Label>
                 </div>
               </RadioGroup>
             </Field>
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Minimum match to tailor">
+              <Field label="Skip jobs below (match / tailored ATS)" hint="Jobs scoring under this are left automatically.">
                 <Num value={s.minMatch} onChange={(v) => set('minMatch', v ?? 0)} min={0} max={100} />
               </Field>
-              <Field label="Auto-submit at ATS ≥">
+              <Field label="Auto-approve when match and ATS are both ≥" hint="These are applied without asking you.">
                 <Num value={s.autoSubmitMin} onChange={(v) => set('autoSubmitMin', v ?? 0)} min={0} max={100} />
               </Field>
               <Field label="Run every (minutes)">
@@ -266,6 +299,12 @@ export const Agent: React.FC = () => {
               </Field>
             </div>
             <div className="flex flex-wrap gap-6 text-sm">
+              <label className="flex items-center gap-2">
+                <Switch checked={s.autoApprove} onCheckedChange={(v) => set('autoApprove', v)} /> Auto-approve &amp; apply high-scoring jobs (≥ {s.autoSubmitMin})
+              </label>
+              <label className="flex items-center gap-2">
+                <Switch checked={s.reviewAnswers} onCheckedChange={(v) => set('reviewAnswers', v)} /> Let me review remembered answers before submitting
+              </label>
               <label className="flex items-center gap-2">
                 <Switch checked={s.dryRun} onCheckedChange={(v) => set('dryRun', v)} /> Dry run (fill forms, never submit)
               </label>
@@ -335,7 +374,7 @@ export const Agent: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Let the agent submit applications by itself?</AlertDialogTitle>
             <AlertDialogDescription>
-              In auto mode the agent submits applications whose tailored ATS score is at least {s.autoSubmitMin}, up to {s.dailyLimit} per day, without asking you first. It still stops at CAPTCHAs, logins and questions it cannot answer truthfully. You can switch back to review mode or turn the agent off at any time.
+              In auto mode the agent submits every application that is not skipped (match and tailored ATS at least {s.minMatch}, experience fits), up to {s.dailyLimit} per day, without asking you first. It still stops at CAPTCHAs, logins and questions it cannot answer truthfully. You can switch back to review mode or turn the agent off at any time.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

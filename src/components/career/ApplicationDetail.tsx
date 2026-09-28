@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { toast } from '@/hooks/use-toast';
 import { career, download } from '@/lib/careerApi';
 import { ACTIVE, Chips, PdfPreview, ScorePill, StageBadge, errMsg, fmtDate } from './bits';
+import { QuestionsPanel } from './QuestionsPanel';
 
 const SOURCE_LABEL: Record<string, string> = { greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', workday: 'Workday', arbeitnow: 'Arbeitnow', remoteok: 'Remote OK', naukri: 'Naukri', indeed: 'Indeed', linkedin: 'LinkedIn', link: 'Job link', manual: 'Manual' };
 
@@ -27,7 +28,11 @@ export function useApplication(id: string | null) {
   });
 }
 
-export const ApplicationDetail: React.FC<{ id: string; onDeleted?: () => void }> = ({ id, onDeleted }) => {
+/**
+ * One application. `onDone` is called after you approve, skip, mark it applied or answer its questions,
+ * so a review queue can open the next job waiting for you.
+ */
+export const ApplicationDetail: React.FC<{ id: string; onDeleted?: () => void; onDone?: (app: JobApplication) => void }> = ({ id, onDeleted, onDone }) => {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { data: a, isLoading, error } = useApplication(id);
@@ -48,11 +53,20 @@ export const ApplicationDetail: React.FC<{ id: string; onDeleted?: () => void }>
     onSuccess: (next) => refresh(next || undefined),
     onError: (e) => toast({ title: 'Could not do that', description: errMsg(e), variant: 'destructive' }),
   });
+  /** Actions that finish your part for this job: afterwards the next job in the queue opens. */
+  const decideAct = useMutation({
+    mutationFn: async (fn: () => Promise<JobApplication>) => fn(),
+    onSuccess: (next) => {
+      refresh(next);
+      onDone?.(next);
+    },
+    onError: (e) => toast({ title: 'Could not do that', description: errMsg(e), variant: 'destructive' }),
+  });
 
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   if (error || !a) return <div className="p-6 text-sm text-destructive">{errMsg(error) || 'Application not found.'}</div>;
 
-  const busy = ACTIVE.includes(a.stage) || act.isPending;
+  const busy = ACTIVE.includes(a.stage) || act.isPending || decideAct.isPending;
   const tracker = TRACKER_STAGES.includes(a.stage as TrackerStage);
   const canApply = !!a.resumeSessionId && ['ready', 'needs_attention', 'failed'].includes(a.stage);
   const lastLog = [...a.log].reverse().find((l) => l.level === 'info');
@@ -93,6 +107,16 @@ export const ApplicationDetail: React.FC<{ id: string; onDeleted?: () => void }>
         </div>
       )}
 
+      <QuestionsPanel app={a} busy={busy} onSubmit={(answers) => decideAct.mutate(() => career.answerQuestions(a.id, answers))} />
+
+      {a.stage === 'skipped' && /below|apply anyway/i.test(a.reason) && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => act.mutate(() => career.prepareAnyway(a.id))}>
+          Apply anyway
+        </Button>
+      )}
+
+      {a.experienceRequired && <p className="text-xs text-muted-foreground">Experience asked: {a.experienceRequired}</p>}
+
       <div className="grid grid-cols-3 gap-2 max-w-md">
         <ScorePill label="Match" value={a.matchScore} />
         <ScorePill label="ATS before" value={a.atsBefore} />
@@ -111,7 +135,7 @@ export const ApplicationDetail: React.FC<{ id: string; onDeleted?: () => void }>
           </>
         )}
         {['ready', 'needs_attention'].includes(a.stage) && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => act.mutate(() => career.setStage(a.id, 'applied', { note: 'You marked it as applied' }))}>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => decideAct.mutate(() => career.setStage(a.id, 'applied', { note: 'You marked it as applied' }))}>
             <CheckCircle2 className="w-4 h-4 mr-1.5" /> Mark as applied
           </Button>
         )}
@@ -121,7 +145,7 @@ export const ApplicationDetail: React.FC<{ id: string; onDeleted?: () => void }>
           </Button>
         )}
         {!tracker && !['skipped', ...ACTIVE].includes(a.stage) && (
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => act.mutate(() => career.setStage(a.id, 'skipped', { note: 'You skipped it' }))}>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => decideAct.mutate(() => career.setStage(a.id, 'skipped', { note: 'You skipped it' }))}>
             <SkipForward className="w-4 h-4 mr-1.5" /> Skip
           </Button>
         )}
@@ -267,7 +291,7 @@ export const ApplicationDetail: React.FC<{ id: string; onDeleted?: () => void }>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => act.mutate(() => career.approve(a.id, true))}>Apply now</AlertDialogAction>
+            <AlertDialogAction onClick={() => decideAct.mutate(() => career.approve(a.id, true))}>Apply now</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

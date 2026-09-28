@@ -40,7 +40,7 @@ export const RunnerBanner: React.FC<{ info: RunnerInfo | undefined; className?: 
       {!info.online && (
         <ol className="text-sm list-decimal pl-5 space-y-1">
           <li>
-            On your computer, in the project folder, put the same <code>FIREBASE_*</code> and <code>DATABASE_URL=firestore</code> values as on Vercel into <code>.env</code>, plus{' '}
+            On your computer, in the project folder, put the same <code>FIREBASE_*</code> and <code>DATABASE_URL=firestore</code> values as your hosted app (Render or Vercel) into <code>.env</code>, plus{' '}
             <code className="break-all">RUNNER_OWNERS={info.ownerId}</code>
             <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 ml-1" onClick={copy} aria-label="Copy your user id">
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}

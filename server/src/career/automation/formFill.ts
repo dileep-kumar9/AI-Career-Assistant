@@ -182,7 +182,10 @@ async function pickComboboxOption(frame: Frame | Page, key: string, value: strin
 /** Fills every field it can answer truthfully; returns what it did and what it could not answer. */
 export async function fillFields(frame: Frame | Page, fields: FieldInfo[], engine: AnswerEngine, files: FillFiles): Promise<FillReport> {
   const report: FillReport = { fields: [], missingRequired: [] };
-  for (const f of fields) {
+  // Files first: many forms read the uploaded resume and pre-fill the other fields from it.
+  const ordered = [...fields.filter((f) => f.kind === 'file'), ...fields.filter((f) => f.kind !== 'file')];
+  let resumeUploaded = false;
+  for (const f of ordered) {
     const entry: FilledField = { label: f.label || f.name || '(unlabelled field)', kind: f.kind, options: f.options, required: f.required, value: '', source: 'rule', confident: false, filled: false };
     const prefilled = f.value && f.kind !== 'file' && f.kind !== 'checkbox' && !/^(select|choose)/i.test(f.value);
     if (prefilled) {
@@ -202,9 +205,17 @@ export async function fillFields(frame: Frame | Page, fields: FieldInfo[], engin
     try {
       switch (f.kind) {
         case 'file': {
+          // One resume per form: a second, optional, unnamed attachment field stays empty.
+          if (a.file === 'resume' && resumeUploaded && !f.required && !/resume|\bcv\b/i.test(f.label)) {
+            entry.value = '';
+            break;
+          }
           const path = a.file === 'cover' ? await files.cover() : files.resume;
           if (!path) throw new Error('No file to upload.');
           await loc.setInputFiles(path, { timeout: 15_000 });
+          if (a.file === 'resume') resumeUploaded = true;
+          // Let the site upload / parse it before the next field.
+          await frame.waitForTimeout(1500);
           break;
         }
         case 'select':
@@ -280,7 +291,9 @@ export async function captchaVisible(page: Page): Promise<boolean> {
     }
   }
   const text = await page.evaluate(() => document.body?.innerText?.slice(0, 3000) || '').catch(() => '');
-  return /verify you are (a )?human|are you a robot|complete the security check|press (&|and) hold/i.test(text);
+  if (/^just a moment/i.test(await page.title().catch(() => ''))) return true;
+  // Cloudflare's interstitial ("Just a moment…", "Additional Verification Required") counts as one too.
+  return /verify you are (a )?human|verifying you are human|are you a robot|complete the security check|press (&|and) hold|additional verification required|checking your browser/i.test(text);
 }
 
 /** Visible validation messages after a submit attempt. */

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Python Developer – careers (fixture)</title></head>
+<body>
+  <!-- Test fixture shaped like a company career site: two pages, a resume upload widget with no file
+       input until it is clicked, and styled <div role="button"> controls. Nothing is sent anywhere. -->
+  <h1>Python Developer</h1>
+  <form id="app" onsubmit="return false">
+    <section id="p1">
+      <label for="fn">Full name *</label><input id="fn" name="name" required>
+      <label for="em">Email *</label><input id="em" type="email" name="email" required>
+      <p>Resume *</p>
+      <div class="upload-zone" id="zone"><span>Upload Resume</span></div>
+      <p id="picked"></p>
+      <div role="button" id="next" style="display:inline-block;padding:6px;border:1px solid">Next</div>
+    </section>
+    <section id="p2" hidden>
+      <label for="ph">Phone number *</label><input id="ph" type="tel" name="phone" required>
+      <div role="button" id="send" style="display:inline-block;padding:6px;border:1px solid">Send application</div>
+    </section>
+  </form>
+  <script>
+    let resume = '';
+    document.getElementById('zone').addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.addEventListener('change', () => { resume = input.files[0].name; document.getElementById('picked').textContent = resume; });
+      input.click();
+    });
+    document.getElementById('next').addEventListener('click', () => {
+      if (!document.getElementById('fn').value || !document.getElementById('em').value || !resume) return;
+      document.getElementById('p1').hidden = true;
+      document.getElementById('p2').hidden = false;
+    });
+    document.getElementById('send').addEventListener('click', () => {
+      if (!document.getElementById('ph').value) return;
+      document.body.innerHTML = '<p>Thank you for applying! Resume received: ' + resume + '</p>';
+    });
+  </script>
+</body>
+</html>

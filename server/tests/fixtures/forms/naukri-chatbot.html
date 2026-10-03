@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Python Developer (naukri chatbot fixture)</title></head>
+<body>
+  <!-- Test fixture shaped like Naukri's Apply → chatbot questions. Nothing is sent anywhere. -->
+  <h1>Python Developer</h1>
+  <button id="apply-button">Apply</button>
+  <div class="chatbot_DrawerContentWrapper" id="drawer" hidden>
+    <div class="botItem" id="q">Are you willing to relocate to Bengaluru?</div>
+    <div class="chatbot_Chip">Yes, I can relocate</div>
+    <div class="chatbot_Chip">No</div>
+  </div>
+  <p id="result"></p>
+  <script>
+    document.getElementById('apply-button').addEventListener('click', () => { document.getElementById('drawer').hidden = false; });
+    document.querySelectorAll('.chatbot_Chip').forEach((chip) => chip.addEventListener('click', () => {
+      document.getElementById('drawer').hidden = true;
+      document.getElementById('result').textContent = chip.textContent === 'No' ? 'Answered: No' : 'You have successfully applied to this job.';
+    }));
+  </script>
+</body>
+</html>

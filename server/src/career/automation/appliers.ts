@@ -4,7 +4,7 @@ import type { ApplicationAnswer, JobSourceId, PendingQuestion } from '../../../.
 import { assertPublicUrl } from '../../services/fetchJob.js';
 import { siteOf } from '../jobs/readers.js';
 import { normQuestion } from '../profile.js';
-import type { AnswerEngine, FieldInfo } from './answers.js';
+import { type AnswerEngine, type FieldInfo, bestOption } from './answers.js';
 import { humanPause } from './browser.js';
 import { type FillFiles, type FillReport, SUCCESS_TEXT, captchaVisible, clickFirst, fillFields, pageSaysSubmitted, scanFields, validationErrors } from './formFill.js';
 
@@ -52,6 +52,8 @@ export interface ApplyDeps {
   confirmed?: string[];
   /** Called with every page the applier opens (so a later retry can close it). */
   onPage?: (page: Page) => void;
+  /** Called with the company application URL a job portal sent us to (so a retry goes there directly). */
+  onRedirect?: (url: string) => void;
   /** Tests only: allow fixture pages on 127.0.0.1. Real apply links must be public addresses. */
   allowPrivateHosts?: boolean;
   /** Tests only: force a flow for a fixture page. */
@@ -130,8 +132,58 @@ async function fillAll(frame: Frame | Page, fields: FieldInfo[], root: string | 
   return report;
 }
 
+// Plain JavaScript run in the page: marks the form's own Submit / Next control (data-aca-btn) when the
+// site's selectors are unusual (a styled <div role=button>, "Send application", "Apply" at the bottom…).
+const FIND_BUTTON = String.raw`(want) => {
+  document.querySelectorAll('[data-aca-btn]').forEach((n) => n.removeAttribute('data-aca-btn'));
+  const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && !el.disabled; };
+  const text = (el) => ((el.innerText || el.value || '') + ' ' + (el.getAttribute('aria-label') || '')).replace(/\s+/g, ' ').trim();
+  const re = want === 'submit'
+    ? /^(submit|send|apply|finish|complete)( (my |your )?(application|now|for this (job|position|role)))?\b/i
+    : /^(next|continue|save (and|&) (continue|next)|proceed)\b/i;
+  const skip = /linkedin|indeed|google|facebook|sign in|log ?in|register|save for later|search|filter|subscribe|newsletter|cookie|accept all/i;
+  const els = [...document.querySelectorAll('button, input[type=submit], input[type=button], a[role=button], [role=button]')].filter((el) => visible(el) && re.test(text(el)) && !skip.test(text(el)));
+  if (!els.length) return false;
+  // Prefer one inside a form, then the last on the page (form footers sit below the "Apply" header buttons).
+  const inForm = els.filter((el) => el.closest('form'));
+  const list = inForm.length ? inForm : els;
+  list[list.length - 1].setAttribute('data-aca-btn', want);
+  return true;
+}`;
+
+async function findButton(frame: Frame | Page, selectors: string[], want: 'submit' | 'next'): Promise<Locator | null> {
+  for (const s of selectors) {
+    const loc = frame.locator(s).filter({ visible: true }).first();
+    if (await loc.isVisible().catch(() => false)) return loc;
+  }
+  const found = await frame.evaluate(`(${FIND_BUTTON})(${JSON.stringify(want)})`).catch(() => false);
+  return found ? frame.locator(`[data-aca-btn="${want}"]`).first() : null;
+}
+
+/** Upload widgets with no file input until clicked ("Upload resume", "Attach CV", drop zones): answer the file chooser. */
+async function uploadViaChooser(page: Page, frame: Frame | Page, deps: ApplyDeps): Promise<boolean> {
+  const trigger = frame
+    .locator('button, a, label, [role=button], div[class*="upload" i], div[class*="drop" i]')
+    .filter({ hasText: /(upload|attach|choose|select|browse|drop|add).{0,25}(resume|résumé|\bcv\b|file)|(resume|\bcv\b).{0,25}(upload|attach|browse)/i })
+    .filter({ visible: true })
+    .last();
+  if (!(await trigger.isVisible().catch(() => false))) return false;
+  try {
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 6000 }), trigger.click({ timeout: 5000 })]);
+    await chooser.setFiles(deps.files.resume);
+    deps.log(`Uploaded the tailored resume (${path.basename(deps.files.resume)}).`);
+    await page.waitForTimeout(2000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function submitAndConfirm(page: Page, frame: Frame | Page, report: FillReport, submitSelectors: string[], deps: ApplyDeps): Promise<ApplyOutcome> {
-  if (!(await clickFirst(frame, submitSelectors, 10_000))) return attention('Filled the form but could not find its Submit button. Please submit it in the open tab.', report);
+  const button = await findButton(frame, submitSelectors, 'submit');
+  if (!button) return attention('Filled the form but could not find its Submit button. Please submit it in the open tab.', report);
+  await button.scrollIntoViewIfNeeded().catch(() => undefined);
+  await button.click({ timeout: 10_000 }).catch(() => undefined);
   deps.log('Pressed Submit.');
   await waitSettled(page, 3000);
   for (let i = 0; i < 6; i++) {
@@ -144,25 +196,62 @@ async function submitAndConfirm(page: Page, frame: Frame | Page, report: FillRep
   return attention(errors.length ? `The site did not accept the form: ${errors.join(' · ').slice(0, 400)}` : 'Submitted, but the site did not show a confirmation. Check the open tab; if it went through, click “Mark as applied”.', report);
 }
 
-/** Fill-and-submit for single-page application forms (Greenhouse, Lever, Ashby, most career sites). */
+const NEXT_SELECTORS = ['button:has-text("Save and continue")', 'button:has-text("Save & continue")', 'button:has-text("Next")', 'button:has-text("Continue")'];
+
+/** Fill-and-submit for application forms (Greenhouse, Lever, Ashby, most career sites), including multi-page ones. */
 async function applyForm(page: Page, task: ApplyTask, deps: ApplyDeps, opts: { root?: string | null; open?: string[]; submit: string[]; where: string }): Promise<ApplyOutcome> {
   await waitSettled(page);
   let { frame, fields } = await formFrame(page, opts.root ?? null);
-  if (fields.length < 2 && opts.open?.length && (await clickFirst(page, opts.open))) {
-    deps.log('Opened the application form.');
-    await waitSettled(page);
+  for (let attempt = 0; fields.length < 2 && attempt < 2; attempt++) {
+    if (opts.open?.length && (await clickFirst(page, opts.open))) {
+      deps.log('Opened the application form.');
+      await waitSettled(page);
+    } else {
+      // Single-page apps (Keka, Darwinbox, …) render the job and its form late.
+      await page.waitForTimeout(4000);
+    }
     ({ frame, fields } = await formFrame(page, opts.root ?? null));
   }
   if (await captchaVisible(page)) return attention('The site is showing a CAPTCHA / “verify you are human” check. Solve it in the open tab, then retry.');
   if (fields.length < 2) return attention('Could not find an application form on this page. It is open for you to apply manually.');
-  deps.log(`Found ${fields.length} form fields.`);
-  const report = await fillAll(frame, fields, opts.root ?? null, deps);
-  deps.log(`Filled ${report.fields.filter((f) => f.filled).length} fields${report.missingRequired.length ? `; ${report.missingRequired.length} required question(s) need you` : ''}.`);
-  if (report.missingRequired.length) return inputNeeded(report, opts.where);
-  const review = toReview(report, deps);
-  if (review.length) return reviewNeeded(review, report);
-  if (!task.submit) return { status: 'filled', reason: 'The form is filled in the open tab — check it and press Submit yourself, then click “Mark as applied”.', answers: toAnswers(report), keepOpen: true };
-  return submitAndConfirm(page, frame, report, opts.submit, deps);
+  const all: FillReport = { fields: [], missingRequired: [] };
+  let uploaded = false;
+  for (let step = 0; step < 8; step++) {
+    deps.log(`Found ${fields.length} form fields${step ? ` on page ${step + 1}` : ''}.`);
+    const report = await fillAll(frame, fields, opts.root ?? null, deps);
+    all.fields.push(...report.fields);
+    all.missingRequired.push(...report.missingRequired);
+    uploaded ||= report.fields.some((f) => f.kind === 'file' && f.filled && !!f.value);
+    if (!uploaded && (await uploadViaChooser(page, frame, deps))) {
+      uploaded = true;
+      // The upload may have answered a required "Resume" question.
+      const left = (await scanFields(frame, opts.root ?? null).catch(() => [] as FieldInfo[])).filter((f) => f.kind === 'file' && f.required && !f.value).map((f) => f.label);
+      all.missingRequired = all.missingRequired.filter((q) => !/resume|\bcv\b/i.test(q) || left.includes(q));
+    }
+    deps.log(`Filled ${report.fields.filter((f) => f.filled).length} fields${all.missingRequired.length ? `; ${all.missingRequired.length} required question(s) need you` : ''}.`);
+    if (all.missingRequired.length) return inputNeeded(all, opts.where);
+    const submit = await findButton(frame, opts.submit, 'submit');
+    const next = submit ? null : await findButton(frame, NEXT_SELECTORS, 'next');
+    if (next) {
+      const pageText = () => frame.evaluate(() => (document.body?.innerText || '').replace(/\s+/g, ' ').slice(0, 3000)).catch(() => '');
+      const before = await pageText();
+      await next.click({ timeout: 8000 }).catch(() => undefined);
+      await waitSettled(page, 1200);
+      const after = await scanFields(frame, opts.root ?? null).catch(() => [] as FieldInfo[]);
+      // Same content after Next = the page did not change (usually a validation error).
+      if ((await pageText()) === before) {
+        const errs = await validationErrors(frame);
+        return attention(errs.length ? `The form did not move to the next page: ${errs.join(' · ').slice(0, 300)}` : 'The form did not move to the next page. It is open for you to finish.', all);
+      }
+      fields = after;
+      continue;
+    }
+    const review = toReview(all, deps);
+    if (review.length) return reviewNeeded(review, all);
+    if (!task.submit) return { status: 'filled', reason: 'The form is filled in the open tab — check it and press Submit yourself, then click “Mark as applied”.', answers: toAnswers(all), keepOpen: true };
+    return submitAndConfirm(page, frame, all, opts.submit, deps);
+  }
+  return attention('The form has more pages than expected. It is open for you to finish.', all);
 }
 
 // ------------------------------------------------------------------ ATS boards
@@ -316,36 +405,31 @@ const isResumePicker = (f: FieldInfo) => (f.kind === 'radio' || f.kind === 'file
  * (sticky header, hidden copies), so only visible ones count. The chosen element is
  * marked data-aca-apply="1".
  */
+// Plain JavaScript executed in the page (a string, so tsx/esbuild never inject helpers such as __name into it).
+const LI_APPLY_BUTTON = String.raw`() => {
+  const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+  const label = (el) => ((el.innerText || '') + ' ' + (el.getAttribute('aria-label') || '')).replace(/\s+/g, ' ').trim();
+  // Controls inside the job list / similar-jobs cards belong to other jobs.
+  const inOtherJob = (el) => !!el.closest('.jobs-search-results-list, .scaffold-layout__list, .job-card-container, .jobs-similar-jobs') || /JOB_DETAILS_SIMILAR_JOBS|\/jobs\/search/.test(el.getAttribute('href') || '');
+  const all = [...document.querySelectorAll('button, a')].filter((el) => visible(el) && !inOtherJob(el));
+  const easy = all.find((el) => /easy apply/i.test(label(el)));
+  if (easy) { easy.setAttribute('data-aca-apply', '1'); return { kind: 'easy', href: null }; }
+  const offsite = all.find((el) => {
+    if (/save|share|alert|similar|premium/i.test(label(el))) return false;
+    return el.classList.contains('jobs-apply-button') || /^apply\b/i.test((el.innerText || '').trim()) || /apply.*(company|website)|^apply to /i.test(el.getAttribute('aria-label') || '') || /externalApply|\/safety\/go/.test(el.getAttribute('href') || '');
+  });
+  if (offsite) {
+    offsite.setAttribute('data-aca-apply', '1');
+    const href = offsite.href || offsite.getAttribute('href');
+    return { kind: 'offsite', href: href && /^https?:/.test(href) ? href : null };
+  }
+  return { kind: 'none', href: null };
+}`;
+
 async function linkedinApplyButton(page: Page): Promise<{ kind: 'easy' | 'offsite' | 'none'; href: string | null }> {
   // The job view can render a moment after load.
   await page.locator('.jobs-apply-button, button[aria-label*="Apply" i], a[aria-label*="Apply" i]').first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => undefined);
-  return page.evaluate(() => {
-    const visible = (el: Element) => {
-      const r = (el as HTMLElement).getBoundingClientRect();
-      const s = getComputedStyle(el as HTMLElement);
-      return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
-    };
-    const label = (el: Element) => `${(el as HTMLElement).innerText || ''} ${el.getAttribute('aria-label') || ''}`.replace(/\s+/g, ' ').trim();
-    // Controls inside the job list / similar-jobs cards belong to other jobs.
-    const inOtherJob = (el: Element) => !!el.closest('.jobs-search-results-list, .scaffold-layout__list, .job-card-container, .jobs-similar-jobs');
-    const all = [...document.querySelectorAll('button, a')].filter((el) => visible(el) && !inOtherJob(el));
-    const easy = all.find((el) => /easy apply/i.test(label(el)));
-    if (easy) {
-      easy.setAttribute('data-aca-apply', '1');
-      return { kind: 'easy' as const, href: null };
-    }
-    const offsite = all.find((el) => {
-      const text = label(el);
-      if (/save|share|alert|similar|premium/i.test(text)) return false;
-      return el.classList.contains('jobs-apply-button') || /^apply\b/i.test(((el as HTMLElement).innerText || '').trim()) || /apply.*(company|website)|^apply to /i.test(el.getAttribute('aria-label') || '') || /externalApply/.test(el.getAttribute('href') || '');
-    });
-    if (offsite) {
-      offsite.setAttribute('data-aca-apply', '1');
-      const href = offsite.getAttribute('href');
-      return { kind: 'offsite' as const, href: href && /^https?:/.test(href) ? href : null };
-    }
-    return { kind: 'none' as const, href: null };
-  });
+  return page.evaluate(`(${LI_APPLY_BUTTON})()`) as Promise<{ kind: 'easy' | 'offsite' | 'none'; href: string | null }>;
 }
 
 /** Job-site hosts: an "apply on company site" link that still points here has not left the portal yet. */
@@ -365,6 +449,20 @@ async function followOffsite(page: Page, ctx: BrowserContext, button: Locator, p
       return false;
     }
   };
+  // The link already names the company page (e.g. LinkedIn's /safety/go/?url=…): no need to click.
+  const direct = (h: string | null) => {
+    if (!h) return null;
+    try {
+      const abs = new URL(h, page.url());
+      if (off(abs.toString())) return abs.toString();
+      const target = abs.searchParams.get('url') || abs.searchParams.get('redirect');
+      return target && off(target) ? target : null;
+    } catch {
+      return null;
+    }
+  };
+  const known = direct(href) || direct(await button.getAttribute('href').catch(() => null));
+  if (known) return known;
   const popup = ctx.waitForEvent('page', { timeout: 12_000 }).catch(() => null);
   await button.click().catch(() => undefined);
   const dialog = page.locator('[role="dialog"] button:has-text("Continue"), [role="dialog"] a:has-text("Continue"), [role="dialog"] button:has-text("Apply"), [role="dialog"] a:has-text("Apply")').filter({ visible: true }).first();
@@ -379,20 +477,7 @@ async function followOffsite(page: Page, ctx: BrowserContext, button: Locator, p
     await page.waitForURL((u) => off(u.toString()), { timeout: 8000 }).catch(() => undefined);
     url = page.url();
   }
-  if (off(url)) return url;
-  // The button's own link, or the company URL inside the portal's redirect link.
-  href ||= await button.getAttribute('href').catch(() => null);
-  if (href) {
-    try {
-      const abs = new URL(href, page.url()).toString();
-      if (off(abs)) return abs;
-      const target = new URL(abs).searchParams.get('url') || new URL(abs).searchParams.get('redirect');
-      if (target && off(target)) return target;
-    } catch {
-      /* not a URL */
-    }
-  }
-  return null;
+  return off(url) ? url : null;
 }
 
 async function linkedin(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: BrowserContext): Promise<ApplyOutcome> {
@@ -470,7 +555,7 @@ async function linkedin(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: Brows
 async function naukri(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: BrowserContext): Promise<ApplyOutcome> {
   await waitSettled(page, 2000);
   if (/nlogin|login\.naukri/.test(page.url())) return attention('You are not logged in to Naukri in the automation browser. Settings → Automation browser → Open Naukri, log in once, then retry.');
-  const already = await page.locator('button:has-text("Applied"), span:has-text("Applied")').first().isVisible().catch(() => false);
+  const already = await page.locator('button:text-is("Applied"), span:text-is("Applied"), #already-applied').first().isVisible().catch(() => false);
   if (already) return { status: 'submitted', reason: 'Naukri shows this job as already applied.', answers: [], keepOpen: false };
   const companySite = page.locator('#company-site-button, button:has-text("Apply on company site"), a:has-text("Apply on company site"), button:has-text("Apply on company website"), a:has-text("Apply on company website")').filter({ visible: true }).first();
   if (await companySite.isVisible().catch(() => false)) {
@@ -481,9 +566,13 @@ async function naukri(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: Browser
   const loginToApply = await page.locator('button:has-text("Login to apply"), a:has-text("Login to apply")').first().isVisible().catch(() => false);
   if (loginToApply) return attention('Naukri says “Login to apply”. Log in to Naukri in the automation browser (Settings), then retry.');
   if (!task.submit) return { status: 'filled', reason: 'Naukri applies in one click with your Naukri profile resume. Press “Apply” in the open tab yourself, then click “Mark as applied”.', answers: [], keepOpen: true };
-  if (!(await clickFirst(page, ['#apply-button', 'button.apply-button', 'button:has-text("Apply")']))) return attention('Could not find Naukri’s Apply button. The job is open for you.');
+  if (!(await clickFirst(page, ['#apply-button', 'button.apply-button', 'button:has-text("Apply")']))) {
+    const walkIn = await page.evaluate(() => document.body?.innerText?.slice(0, 5000) || '').then((t) => /walk[- ]?in/i.test(t)).catch(() => false);
+    return attention(walkIn ? 'This Naukri job is a walk-in interview: there is no online application. The details (date, venue) are in the open tab.' : 'Could not find Naukri’s Apply button. The job is open for you.');
+  }
   deps.log('Pressed Apply on Naukri (Naukri sends your profile resume).');
   const answers: ApplicationAnswer[] = [];
+  let lastQuestion = '';
   for (let turn = 0; turn < 15; turn++) {
     await page.waitForTimeout(1800);
     const body = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
@@ -494,7 +583,8 @@ async function naukri(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: Browser
       continue;
     }
     const question = ((await page.locator('[class*="botMsg"], .botItem').last().innerText().catch(() => '')) || '').trim();
-    if (!question) continue;
+    // Still the question just answered: wait for the chatbot's next message instead of answering twice.
+    if (!question || question === lastQuestion) continue;
     const chips = page.locator('[class*="chatbot_Chip"], .chatbot_Chip, [class*="ssrc__radio-btn-container"] label');
     const options = (await chips.allInnerTexts().catch(() => [])).map((t) => t.trim()).filter(Boolean);
     const field: FieldInfo = { key: 'chat', kind: options.length ? 'radio' : 'text', label: question, name: '', required: true, options, value: '', autocomplete: '', placeholder: '', accept: '' };
@@ -502,11 +592,17 @@ async function naukri(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: Browser
     if (!a || !a.confident || !a.value) {
       return { status: 'needs_input', reason: `Naukri’s application chatbot asks: “${question.slice(0, 200)}”. Answer it in the app (it is remembered), or in the open tab.`, answers, questions: [{ question, kind: field.kind, options, required: true, suggested: '', source: 'none' }], keepOpen: true };
     }
-    answers.push({ question, answer: a.value, source: a.source, confident: true });
-    if (options.length) await chips.nth(options.indexOf(a.value)).click().catch(() => undefined);
+    // The answer must be one of the chips ("Yes" → "Yes, I can"); never click a guess.
+    const chip = options.length ? bestOption(a.value, options) : null;
+    if (options.length && !chip) {
+      return { status: 'needs_input', reason: `Naukri’s application chatbot asks: “${question.slice(0, 200)}” and none of its choices matches your answer. Pick one in the app (it is remembered), or in the open tab.`, answers, questions: [{ question, kind: 'radio', options, required: true, suggested: '', source: 'none' }], keepOpen: true };
+    }
+    answers.push({ question, answer: chip || a.value, source: a.source, confident: true });
+    lastQuestion = question;
+    if (chip) await chips.nth(options.indexOf(chip)).click().catch(() => undefined);
     else {
       const input = page.locator('[class*="chatbot"] [contenteditable="true"], [class*="chatbot"] textarea, [class*="chatbot"] input[type="text"]').last();
-      await input.fill(a.value).catch(() => input.pressSequentially(a.value, { delay: 20 }));
+      await input.fill(a.value, { timeout: 8000 }).catch(() => input.pressSequentially(a.value, { delay: 20, timeout: 15_000 }).catch(() => undefined));
     }
     await clickFirst(page, ['[class*="sendMsg"]', '[class*="chatbot"] button:has-text("Save")', '[class*="chatbot"] button:has-text("Submit")']);
   }
@@ -518,7 +614,9 @@ async function naukri(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: Browser
 
 async function indeed(page: Page, task: ApplyTask, deps: ApplyDeps, ctx: BrowserContext): Promise<ApplyOutcome> {
   await waitSettled(page, 2000);
-  if (await captchaVisible(page)) return attention('Indeed is showing a “verify you are human” check. Solve it in the open tab, then retry.');
+  if (await captchaVisible(page)) return attention('Indeed is showing a Cloudflare “verify you are human” / “Additional verification required” check. Solve it in the open tab, then retry.');
+  const gone = await page.evaluate(() => document.body?.innerText?.slice(0, 2000) || '').then((t) => /we can.t find this page|this job has expired|job has been removed|no longer available/i.test(t)).catch(() => false);
+  if (gone) return { status: 'failed', reason: 'This Indeed job is no longer available (the posting was removed or expired).', answers: [], keepOpen: false };
   const applyBtn = page.locator('#indeedApplyButton, button:has-text("Apply now"), button[aria-label*="Apply now"]').filter({ visible: true }).first();
   if (!(await applyBtn.isVisible().catch(() => false))) {
     const ext = page
@@ -625,6 +723,7 @@ export async function runApplier(ctx: BrowserContext, task: ApplyTask, deps: App
     else await page.bringToFront().catch(() => undefined);
     if (outcome.redirectUrl && hop === 0) {
       deps.log(`This job applies on another site: ${new URL(outcome.redirectUrl).hostname}.`);
+      deps.onRedirect?.(outcome.redirectUrl);
       url = outcome.redirectUrl;
       continue;
     }

@@ -92,7 +92,12 @@ export function ruleAnswer(f: FieldInfo, ctx: AnswerContext): FieldAnswer | null
 
   if (f.kind === 'file') {
     if (has(label, /cover/)) return ctx.wantCoverLetter ? { value: 'cover letter', source: 'rule', confident: true, file: 'cover' } : null;
-    if (has(label, /resume|cv\b|curriculum/) || (!has(label, /photo|picture|image|transcript|portfolio|sample/) && f.required)) return { value: 'resume', source: 'rule', confident: true, file: 'resume' };
+    if (has(label, /resume|résumé|\bcv\b|curriculum|bio ?data/)) return { value: 'resume', source: 'rule', confident: true, file: 'resume' };
+    // Image-only inputs and other documents are not the resume.
+    const imageOnly = !!f.accept && f.accept.split(',').every((a) => /image|\.(jpe?g|png|gif|webp|heic)$/i.test(a.trim()));
+    if (imageOnly || has(label, /photo|picture|image|avatar|transcript|portfolio|sample|certificate|id proof|aadhaa?r|pan card|passport|signature/)) return null;
+    // Unlabelled / "Attach" / "Upload document" inputs on an application form take the resume; optional extra attachments only when required.
+    if (f.required || !has(label, /additional|other|supporting|extra/)) return { value: 'resume', source: 'rule', confident: true, file: 'resume' };
     return null;
   }
 

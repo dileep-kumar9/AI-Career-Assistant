@@ -193,14 +193,40 @@ describe('form filler + appliers (real Chrome, local fixtures)', () => {
       if (!chromeOk) return t.skip();
       const logs: string[] = [];
       let last: import('playwright-core').Page | null = null;
-      const out = await browser.exclusive((c) => runApplier(c, task(`${site}-offsite.html`, false), { engine: engine(), files: { resume: resumePdf, cover: async () => null }, log: (m) => logs.push(m), allowPrivateHosts: true, forceKind: site, onPage: (p) => (last = p) }));
+      let redirect = '';
+      const out = await browser.exclusive((c) => runApplier(c, task(`${site}-offsite.html`, false), { engine: engine(), files: { resume: resumePdf, cover: async () => null }, log: (m) => logs.push(m), allowPrivateHosts: true, forceKind: site, onPage: (p) => (last = p), onRedirect: (u) => (redirect = u) }));
       expect(logs.join(' ')).toMatch(/applies on the company website/);
+      // Saved so a retry opens the company form, not the portal (which already shows the job as applied).
+      expect(redirect).toMatch(/greenhouse-like\.html$/);
       expect(out.status).toBe('filled');
       expect(last!.url()).toMatch(/greenhouse-like\.html$/);
       expect(await last!.inputValue('#email')).toBe('asha@example.com');
       await last!.close();
     }, 120_000);
   }
+
+  it('company career site: uploads the resume through a click-to-upload widget, goes through two pages and submits with a div button', async (t) => {
+    if (!chromeOk) return t.skip();
+    const logs: string[] = [];
+    const out = await browser.exclusive((c) => runApplier(c, task('career-site-multistep.html', true), { engine: engine(), files: { resume: resumePdf, cover: async () => null }, log: (m) => logs.push(m), allowPrivateHosts: true }));
+    expect(logs.join(' ')).toMatch(/Uploaded the tailored resume \(resume\.pdf\)/);
+    expect(logs.join(' ')).toMatch(/on page 2/);
+    expect(out.status).toBe('submitted');
+  }, 120_000);
+
+  it('Indeed behind Cloudflare: says so instead of "no Apply button"', async (t) => {
+    if (!chromeOk) return t.skip();
+    const out = await browser.exclusive((c) => runApplier(c, task('indeed-cloudflare.html', true), { engine: engine(), files: { resume: resumePdf, cover: async () => null }, log: () => undefined, allowPrivateHosts: true, forceKind: 'indeed' }));
+    expect(out.status).toBe('needs_attention');
+    expect(out.reason).toMatch(/Cloudflare/);
+  }, 60_000);
+
+  it('Naukri chatbot: answers a chip question with the matching chip ("Yes" → "Yes, I can relocate") and confirms the application', async (t) => {
+    if (!chromeOk) return t.skip();
+    const out = await browser.exclusive((c) => runApplier(c, task('naukri-chatbot.html', true), { engine: engine(), files: { resume: resumePdf, cover: async () => null }, log: () => undefined, allowPrivateHosts: true, forceKind: 'naukri' }));
+    expect(out.answers.map((a) => a.answer)).toEqual(['Yes, I can relocate']);
+    expect(out.status).toBe('submitted');
+  }, 120_000);
 
   it('Google Forms: fills ARIA radios, dropdowns and checkboxes over two pages, and pauses to review a remembered answer', async (t) => {
     if (!chromeOk) return t.skip();

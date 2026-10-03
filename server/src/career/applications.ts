@@ -599,6 +599,10 @@ export class ApplicationService {
             reviewAnswers: settings.reviewAnswers,
             confirmed: doc.answerOverrides.map((o) => o.question),
             onPage: (p) => this.openPages.set(doc.id, p),
+            // Retries open the company form directly: the portal already counts the job as applied once its button was pressed.
+            onRedirect: (url) => {
+              doc.applyUrl = url;
+            },
           },
         ),
       );
